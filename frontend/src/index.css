@@ -1,0 +1,266 @@
+:root {
+  /* Edit these scales to adjust typography and spacing across the app. */
+  --font-xs: 12px;
+  --font-sm: 13px;
+  --font-base: 14px;
+  --font-lg: 16px;
+  --font-xl: 20px;
+  --font-2xl: 24px;
+  --font-3xl: 32px;
+
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* Theme colors. The main accent stays #c1c1ff in both themes. */
+  --color-bg: #10141b;
+  --color-sidebar: #141a22;
+  --color-header: #121820;
+  --color-card: #171e27;
+  --color-surface: #19212a;
+  --color-surface-raised: #212b35;
+  --color-input: #131a23;
+  --color-modal: #1a222c;
+  --color-hover: #28343e;
+  --color-active: #1d2831;
+  --color-text: #e8eef5;
+  --color-text-strong: #f1f3ff;
+  --color-text-secondary: #a7b7c4;
+  --color-text-muted: #8294a2;
+  --color-text-faint: #647684;
+  --color-border: #26303b;
+  --color-border-strong: #3a4853;
+  --color-accent: #c1c1ff;
+  --color-accent-hover: #d8d8ff;
+  --color-accent-text: #c1c1ff;
+  --color-accent-soft: #30304b;
+  --color-accent-border: #6565a3;
+  --color-on-accent: #22203d;
+  --color-success: #71dbae;
+  --color-danger: #ef999b;
+  --color-error-bg: #482e34;
+  --color-error-border: #87535b;
+  --color-error-text: #ffc2c5;
+  --color-warning: #ecc777;
+  --color-overlay: #05080bc9;
+  --color-shadow: #0009;
+  --color-shadow-soft: #0006;
+  --color-focus-ring: #8f8fff33;
+  --color-accent-glow: #c1c1ff44;
+  --color-accent-glow-soft: #c1c1ff1c;
+  --color-security-bg: linear-gradient(145deg, #292943, #202433);
+  --color-fingerprint-bg: #111920;
+  --color-toast-bg: #30304b;
+  --color-toast-text: #ededff;
+  --color-toast-border: #6565a3;
+  --color-illustration-bg: #111a21;
+  --color-illustration-text: #dcebe6;
+  --color-illustration-border: #6565a3;
+  --color-illustration-muted: #7f8eae;
+  --color-illustration-accent: #c1c1ff;
+  --color-terminal-bg: #10141b;
+  --color-terminal-toolbar: #19212a;
+  --color-terminal-border: #35424c;
+
+  --font-family-mono: Consolas, monospace;
+  font-family: Inter, "Segoe UI", Arial, sans-serif;
+  font-size: var(--font-base);
+  color: var(--color-text);
+  background: var(--color-bg);
+  color-scheme: dark;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+:root[data-theme="light"] {
+  --color-bg: #f7f8fd;
+  --color-sidebar: #eff1fa;
+  --color-header: #ffffff;
+  --color-card: #ffffff;
+  --color-surface: #f7f8fd;
+  --color-surface-raised: #eceef8;
+  --color-input: #ffffff;
+  --color-modal: #ffffff;
+  --color-hover: #e5e8f3;
+  --color-active: #e9e7fb;
+  --color-text: #20243a;
+  --color-text-strong: #181b31;
+  --color-text-secondary: #59627b;
+  --color-text-muted: #69738b;
+  --color-text-faint: #8990a5;
+  --color-border: #dce0ed;
+  --color-border-strong: #bfc6d8;
+  --color-accent-hover: #adabfb;
+  --color-accent-text: #514a98;
+  --color-accent-soft: #ecebff;
+  --color-accent-border: #aaa9ed;
+  --color-success: #18805b;
+  --color-danger: #b54251;
+  --color-error-bg: #fff0f2;
+  --color-error-border: #efb7c0;
+  --color-error-text: #9f3443;
+  --color-warning: #a2701d;
+  --color-overlay: #1d214966;
+  --color-shadow: #2024432b;
+  --color-shadow-soft: #20244322;
+  --color-focus-ring: #7772df3d;
+  --color-accent-glow: #aaa8fa66;
+  --color-accent-glow-soft: #aaa8fa33;
+  --color-security-bg: linear-gradient(145deg, #ecebff, #f7f7ff);
+  --color-fingerprint-bg: #f5f5ff;
+  --color-toast-bg: #ecebff;
+  --color-toast-text: #393366;
+  --color-toast-border: #aaa9ed;
+  --color-illustration-bg: #25243c;
+  --color-illustration-text: #f0efff;
+  --color-illustration-border: #9290e5;
+  --color-illustration-muted: #b0afd0;
+  --color-terminal-bg: #ffffff;
+  --color-terminal-toolbar: #f3f4fb;
+  --color-terminal-border: #cfd3e5;
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 780px;
+}
+
+p {
+  font-size: var(--font-base);
+  line-height: 1.55;
+}
+
+/* Typography utilities: font-xs, font-sm, font-base, font-lg, and up. */
+.font-xs {
+  font-size: var(--font-xs);
+}
+.font-sm {
+  font-size: var(--font-sm);
+}
+.font-base {
+  font-size: var(--font-base);
+}
+.font-lg {
+  font-size: var(--font-lg);
+}
+.font-xl {
+  font-size: var(--font-xl);
+}
+.font-2xl {
+  font-size: var(--font-2xl);
+}
+.font-3xl {
+  font-size: var(--font-3xl);
+}
+
+/* Padding utilities: p = all sides, px = left/right, py = top/bottom. */
+.p-0 {
+  padding: var(--space-0);
+}
+.p-1 {
+  padding: var(--space-1);
+}
+.p-2 {
+  padding: var(--space-2);
+}
+.p-3 {
+  padding: var(--space-3);
+}
+.p-4 {
+  padding: var(--space-4);
+}
+.p-5 {
+  padding: var(--space-5);
+}
+.p-6 {
+  padding: var(--space-6);
+}
+.p-8 {
+  padding: var(--space-8);
+}
+
+.px-0 {
+  padding-inline: var(--space-0);
+}
+.px-1 {
+  padding-inline: var(--space-1);
+}
+.px-2 {
+  padding-inline: var(--space-2);
+}
+.px-3 {
+  padding-inline: var(--space-3);
+}
+.px-4 {
+  padding-inline: var(--space-4);
+}
+.px-5 {
+  padding-inline: var(--space-5);
+}
+.px-6 {
+  padding-inline: var(--space-6);
+}
+.px-8 {
+  padding-inline: var(--space-8);
+}
+
+.py-0 {
+  padding-block: var(--space-0);
+}
+.py-1 {
+  padding-block: var(--space-1);
+}
+.py-2 {
+  padding-block: var(--space-2);
+}
+.py-3 {
+  padding-block: var(--space-3);
+}
+.py-4 {
+  padding-block: var(--space-4);
+}
+.py-5 {
+  padding-block: var(--space-5);
+}
+.py-6 {
+  padding-block: var(--space-6);
+}
+.py-8 {
+  padding-block: var(--space-8);
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--color-accent-text);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}

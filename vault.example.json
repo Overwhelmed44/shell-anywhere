@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "workspaces": {
+    "personal": {
+      "hosts": {
+        "111111111111111111111111": {
+          "name": "Production API",
+          "address": "192.0.2.10",
+          "port": 22,
+          "groupId": "222222222222222222222222",
+          "useGroupIdentity": true,
+          "favorite": true
+        },
+        "444444444444444444444444": {
+          "name": "Production worker",
+          "address": "192.0.2.20",
+          "port": 22,
+          "identityId": "333333333333333333333333",
+          "favorite": false
+        }
+      },
+      "groups": {
+        "222222222222222222222222": {
+          "name": "Production",
+          "defaultIdentityId": "333333333333333333333333"
+        }
+      },
+      "identities": {
+        "333333333333333333333333": {
+          "name": "Production deploy",
+          "username": "deploy",
+          "authMethod": "password",
+          "password": "example-password"
+        }
+      },
+      "knownHosts": ""
+    },
+    "others": {}
+  }
+}

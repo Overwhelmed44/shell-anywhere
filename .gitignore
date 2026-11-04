@@ -1,0 +1,9 @@
+/build/bin/
+/build/windows/installer/tmp/
+/frontend/node_modules/
+/frontend/dist/
+/frontend/wailsjs/
+/frontend/package.json.md5
+/.wails-template/
+/.qa-appdata/
+*.log

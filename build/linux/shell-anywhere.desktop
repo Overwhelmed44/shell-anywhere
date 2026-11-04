@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Shell Anywhere
+Comment=SSH terminals and SFTP file transfers
+Exec=ShellAnywhere
+Icon=shell-anywhere
+Terminal=false
+Categories=Network;RemoteAccess;
+StartupNotify=true
+StartupWMClass=shell-anywhere
