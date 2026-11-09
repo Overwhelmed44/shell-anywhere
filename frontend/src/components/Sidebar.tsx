@@ -106,7 +106,7 @@ export default function Sidebar({
         </nav>
       )}
       <div className="sidebar-bottom">
-        {!account.user_id && (
+        {!account.user_id ? (
           <div className="oxee-account" aria-busy={accountBusy}>
             <div className="oxee-account-identity">
               <UserRound size={18} aria-hidden="true" />
@@ -139,19 +139,20 @@ export default function Sidebar({
               </button>
             )}
           </div>
-        )}
-        <div className="security-card p-4">
-          <div className="sidebar-pbdesign">
-            <div className="security-icon">
-              <ShieldCheck size={17} />
+        ) : (
+          <div className="security-card p-4">
+            <div className="sidebar-pbdesign">
+              <div className="security-icon">
+                <ShieldCheck size={17} />
+              </div>
+              <strong>Private by design</strong>
             </div>
-            <strong>Private by design</strong>
+            <p>
+              Encrypted syncing brings your hosts, passwords, and private keys to
+              your other devices
+            </p>
           </div>
-          <p>
-            Encrypted syncing brings your hosts, passwords, and private keys to
-            your other devices
-          </p>
-        </div>
+        )}
         <div
           className="sidebar-footer"
           data-update-state={update.state}
