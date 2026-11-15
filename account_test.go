@@ -325,8 +325,12 @@ func TestAccountOriginRejectsRemoteHTTP(t *testing.T) {
 func TestAccountOriginBuildDefaultAndEnvironmentOverride(t *testing.T) {
 	t.Setenv("SHELLANYWHERE_OXEE_URL", "")
 	app := &App{}
-	if origin, err := app.accountOrigin(); err != nil || origin != defaultOxeeURL {
-		t.Fatalf("build default not used: %q, %v", origin, err)
+	if origin, err := app.accountOrigin(); err != nil || origin != "https://oxee.net" {
+		t.Fatalf("account must default to production: %q, %v", origin, err)
+	}
+	t.Setenv("SHELLANYWHERE_OXEE_URL", "https://oxee.localhost")
+	if origin, err := app.accountOrigin(); err != nil || origin != "https://oxee.localhost" {
+		t.Fatalf("development environment did not override production: %q, %v", origin, err)
 	}
 	t.Setenv("SHELLANYWHERE_OXEE_URL", "https://custom.example")
 	if origin, err := app.accountOrigin(); err != nil || origin != "https://custom.example" {
@@ -346,11 +350,14 @@ func TestAccountTLSAcceptsDevCertificatesOnlyForLoopback(t *testing.T) {
 	}{
 		{"https://localhost", true},
 		{"https://LOCALHOST.", true},
+		{"https://oxee.localhost", true},
+		{"https://shell-aw.oxee.localhost", true},
 		{"https://127.0.0.1", true},
 		{"https://127.1.2.3", true},
 		{"https://[::1]", true},
 		{"https://oxee.net", false},
 		{"https://localhost.example.com", false},
+		{"https://oxee.localhost.example.com", false},
 		{"https://192.168.1.10", false},
 	} {
 		t.Run(test.origin, func(t *testing.T) {
@@ -443,7 +450,7 @@ func TestMSARValidatesRemoteCertificateWithLocalAccount(t *testing.T) {
 	}
 	response.Body.Close()
 
-	response, err = client.Get(context.Background(), "https://example.com/api/private/vaults")
+	response, err = client.Get(context.Background(), "https://example.com/api/v1/private/vaults")
 	if response != nil {
 		response.Body.Close()
 	}

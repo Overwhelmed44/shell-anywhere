@@ -82,6 +82,12 @@ func (a *App) readWorkspace(id string) (localWorkspace, error) {
 	if data.Identities == nil {
 		data.Identities = []Identity{}
 	}
+	for i := range data.Hosts {
+		data.Hosts[i].KeyPath = a.migratedKeyPath(data.Hosts[i].KeyPath)
+	}
+	for i := range data.Identities {
+		data.Identities[i].KeyPath = a.migratedKeyPath(data.Identities[i].KeyPath)
+	}
 	return data, nil
 }
 

@@ -142,6 +142,7 @@ type Backend = {
   CancelSFTPTransfer(sessionId: string, id: string): Promise<void>;
   GetAppVersion(): Promise<string>;
   GetUpdateStatus(): Promise<UpdateStatus>;
+  InstallUpdate(): Promise<void>;
   GetAccount(): Promise<AccountStatus>;
   BeginLogin(): Promise<void>;
   CancelLogin(): Promise<void>;
@@ -284,6 +285,7 @@ export const api = {
     backend().CancelSFTPTransfer(sessionId, id),
   getAppVersion: () => backend().GetAppVersion(),
   getUpdateStatus: () => backend().GetUpdateStatus(),
+  installUpdate: () => backend().InstallUpdate(),
   getAccount: () => backend().GetAccount(),
   beginLogin: () => backend().BeginLogin(),
   cancelLogin: () => backend().CancelLogin(),

@@ -58,8 +58,8 @@ export default function VaultDialog({ status, onChange, onClose }: Props) {
   const enable = async (direction = "") => {
     if (working) return;
 
-    if ((!status.protected || status.locked) && !password) {
-      setError("Enter a vault password to encrypt your SSH credentials");
+    if (status.locked && !password) {
+      setError("Enter your vault password to unlock syncing");
       return;
     }
 
@@ -131,14 +131,16 @@ export default function VaultDialog({ status, onChange, onClose }: Props) {
               <span><strong>Use this device’s hosts</strong><small>{status.localHosts} hosts · replaces the cloud host list</small></span>
             </button>
           </div>
-        ) : status.enabled && status.protected && !status.locked ? (
+        ) : status.enabled && !status.locked ? (
           <div className="vault-content">
             <p className="modal-intro">Your hosts, groups, passwords, private keys, and trusted servers sync automatically across your devices</p>
             <div className="vault-protection">
               {status.protected ? <LockKeyhole size={20} /> : <Cloud size={20} />}
               <div>
-                <strong>Your connection vault is encrypted</strong>
-                <p>Enter your vault password on another device to restore your connections</p>
+                <strong>{status.protected ? "Your connection vault is encrypted" : "Syncing with your Oxee account"}</strong>
+                <p>{status.protected
+                  ? "Enter your vault password on another device to restore your connections"
+                  : "Sign in on another device to restore your connections without a vault password"}</p>
               </div>
             </div>
             {status.lastSynced && <p className="vault-note">Last synced {new Date(status.lastSynced).toLocaleString()}</p>}
@@ -158,30 +160,34 @@ export default function VaultDialog({ status, onChange, onClose }: Props) {
                 : "Sync your complete SSH connections across devices with your Oxee account"}
             </p>
             <div className="vault-protection">
-              <LockKeyhole size={20} />
+              {status.protected || password ? <LockKeyhole size={20} /> : <Cloud size={20} />}
               <p>{status.locked
                 ? "Your password unlocks your hosts, passwords, and private keys"
-                : "Your vault password encrypts your hosts and credentials before they leave this device"}</p>
+                : status.protected
+                  ? "This device remembers your vault encryption key"
+                  : "Add an optional vault password for end-to-end encryption"}</p>
             </div>
             <label className="field">
-              <span>Vault password</span>
-              <input type="password" autoComplete={status.locked || status.protected ? "current-password" : "new-password"} value={password} onChange={(event) => setPassword(event.target.value)} placeholder={status.protected && !status.locked ? "Leave blank to use this device’s saved vault key" : "Enter your vault password"} required={!status.protected || status.locked} disabled={working} />
+              <span>Vault password{!status.protected && !status.locked && <span className="optional">Optional</span>}</span>
+              <input type="password" autoComplete={status.locked || status.protected ? "current-password" : "new-password"} value={password} onChange={(event) => setPassword(event.target.value)} placeholder={status.protected && !status.locked ? "Leave blank to use this device's saved vault key" : status.locked ? "Enter your vault password" : "Leave blank to sync without a password"} required={status.locked} disabled={working} />
             </label>
             {password && !status.locked && !status.protected && <label className="field">
               Confirm vault password
               <input type="password" autoComplete="new-password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} disabled={working} />
             </label>}
-            <p className="vault-note">You’ll need your vault password when setting up syncing on a new device</p>
+            <p className="vault-note">{status.protected || password
+              ? "You'll need your vault password when setting up syncing on a new device"
+              : "Without a vault password, access to your synced connections is managed by your Oxee account"}</p>
             <div className="modal-actions">
               <button type="button" className="button secondary" disabled={working} onClick={onClose}>Not now</button>
               <span className="spacer" />
-              <button type="submit" className="button primary" disabled={working}>{working ? "Connecting…" : status.locked ? "Unlock syncing" : "Enable encrypted sync"}</button>
+              <button type="submit" className="button primary" disabled={working}>{working ? "Connecting…" : status.locked ? "Unlock syncing" : "Enable syncing"}</button>
             </div>
           </form>
         )}
 
         {(error || status.error) && <div className="form-error" role="alert">{error || status.error}</div>}
-        <p className="vault-note vault-local-note">SSH passwords, private keys, and saved key passphrases are included in your encrypted vault</p>
+        <p className="vault-note vault-local-note">Sync includes SSH passwords, private keys, and saved key passphrases</p>
       </div>
     </div>
   );

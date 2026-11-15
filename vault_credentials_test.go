@@ -174,7 +174,7 @@ func TestFreshDeviceConnectsWithSyncedPasswordAndEncryptedPrivateKey(t *testing.
 	}
 }
 
-func TestCredentialVaultRejectsPlaintextAndMissingKeys(t *testing.T) {
+func TestCredentialVaultRejectsMissingKeys(t *testing.T) {
 	a := syncTestApp(t, "http://localhost")
 	_, err := a.SaveHost(Host{Address: "example.test", Port: 22, AuthMethod: "key", KeyPath: filepath.Join(t.TempDir(), "missing-key")}, "")
 	if err != nil {
@@ -185,14 +185,14 @@ func TestCredentialVaultRejectsPlaintextAndMissingKeys(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := encodeVault(data, vaultKey{}); err == nil {
-		t.Fatal("credential vault accepted without encryption")
+		t.Fatal("missing key silently uploaded without a vault password")
 	}
 	if _, err := encodeVault(data, newVaultKey("password")); err == nil {
 		t.Fatal("missing key silently uploaded")
 	}
 	plain, _ := json.Marshal(map[string]any{"version": 1, "protected": false, "data": json.RawMessage(data)})
 	if _, _, _, err := decodeVault(plain, "", vaultKey{}); err == nil {
-		t.Fatal("plaintext credentials accepted")
+		t.Fatal("unprotected vault with a missing private key was accepted")
 	}
 }
 

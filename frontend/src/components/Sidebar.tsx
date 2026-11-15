@@ -7,6 +7,7 @@ import {
   LogIn,
   UserRound,
   KeyRound,
+  Download,
 } from "lucide-react";
 import type {
   Host,
@@ -18,6 +19,8 @@ import type {
 
 type Props = {
   update: UpdateStatus;
+  updateBusy: boolean;
+  onUpdate: () => void;
   account: AccountStatus;
   accountBusy: boolean;
   onAccountAction: (action: AccountAction) => void;
@@ -31,6 +34,8 @@ type Props = {
 
 export default function Sidebar({
   update,
+  updateBusy,
+  onUpdate,
   account,
   accountBusy,
   onAccountAction,
@@ -148,9 +153,21 @@ export default function Sidebar({
               <strong>Private by design</strong>
             </div>
             <p>
-              Encrypted syncing brings your hosts, passwords, and private keys to
+              Host syncing brings your hosts, passwords, and private keys to
               your other devices
             </p>
+          </div>
+        )}
+        {update.state === "update_available" && (
+          <div className="update-action" aria-busy={updateBusy}>
+            <button type="button" disabled={updateBusy} onClick={onUpdate}>
+              <Download size={15} aria-hidden="true" />
+              <span role="status">
+                {updateBusy
+                  ? "Downloading update…"
+                  : `Update to v${update.latestVersion}`}
+              </span>
+            </button>
           </div>
         )}
         <div

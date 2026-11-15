@@ -15,8 +15,8 @@ A desktop SSH client built with Go, Wails, React, and xterm.js.
 - When an SSH connection ends, use **Reconnect** in its terminal header. The existing tab, terminal history, and split group stay in place. Saved passwords reconnect directly; other credentials use the connection dialog.
 - Open local terminals: PowerShell and Command Prompt on Windows, or your login shell on macOS and Linux. The menu lists the shells available on the current platform
 - Switch between dark and light themes; the selected theme is remembered on this device.
-- Save SSH passwords and successfully used private-key passphrases in the operating system's credential store, and include them in encrypted syncing
-- Store hosts and trusted host keys in the user's config directory.
+- Save SSH passwords and successfully used private-key passphrases in the operating system's credential store, and include them when syncing
+- Store hosts and trusted host keys in `shell-anywhere` inside the user's config directory. Existing settings move automatically from the old directory, including restored private keys
 
 ## SFTP file transfers
 
@@ -36,25 +36,29 @@ Transfers show their progress and can be cancelled. Existing files require confi
 
 Use **Sign in** in the top-right navigation or **Sign in with Oxee** in the sidebar to open the system browser. Sign in or create an account there, then return to Shell Anywhere. Your username replaces the navigation sign-in button, and the sidebar sign-in card disappears. Click your username and select **Sign out** to disconnect the account. An existing browser login can continue with the displayed account or select another one. Login is optional: hosts, SSH sessions, and local terminals work without an Oxee account and while offline.
 
-After signing in, optionally enable **Host syncing** with a vault password. Hosts, groups, favorites, saved SSH passwords, private-key contents, saved key passphrases, and trusted server keys are encrypted together before upload using AES-256-GCM and an Argon2id-derived key. Sign in and enter the same vault password on another device to restore ready-to-use connections. The derived vault key is remembered in the OS credential store under `shell-anywhere-vault`; the vault password and derived key are never sent to the server
+After signing in, optionally enable **Host syncing**. A vault password is optional: leave it blank to sync hosts, groups, favorites, saved SSH passwords, private-key contents, saved key passphrases, and trusted server keys through your Oxee account. Sign in on another device to restore ready-to-use connections without a separate password
+
+Adding a vault password enables end-to-end encryption using AES-256-GCM and an Argon2id-derived key. Enter that same password on a new device to unlock a protected vault. The derived vault key is remembered in the OS credential store under `shell-anywhere-vault`; the vault password and derived key are never sent to the server. Existing protected vaults still require their password or a saved key
 
 Restored passwords and key passphrases go into the new device's OS credential store. Private keys are restored into the app's configuration directory under `keys/`, with device-local paths and owner-only file permissions on systems that support them. Passwords and key contents never appear in `hosts.json` or `vault.json`. A key passphrase is remembered after a successful SSH authentication; keys that have never been unlocked in this app still need their passphrase once. Oxee login sessions remain device-specific
 
-The vault JSON and its encrypted envelope both use format version `1`. Syncing encrypts the complete vault, including SSH credentials
+The vault JSON and its envelope both use format version `1`. Without a vault password, the envelope contains the complete vault in `data` with `protected: false`; access is managed by your authenticated Oxee account. With a password, the complete vault, including SSH credentials, is encrypted in `encrypted` with `protected: true` and a `salt`
 
-The decrypted document contains `workspaces.personal` and an `workspaces.others` map reserved for future workspace support. Within each workspace, `hosts`, `groups`, and `identities` are maps keyed by stable IDs. IDs are not repeated inside their values. Hosts reference groups through `groupId` and identities through `identityId`, or set `useGroupIdentity` to inherit `defaultIdentityId` from their group. Credentials are stored once in an identity; hosts with separate credentials store their own. `knownHosts` belongs to its workspace. See [vault.example.json](vault.example.json) for a complete example
+The vault document contains `workspaces.personal` and an `workspaces.others` map reserved for future workspace support. Within each workspace, `hosts`, `groups`, and `identities` are maps keyed by stable IDs. IDs are not repeated inside their values. Hosts reference groups through `groupId` and identities through `identityId`, or set `useGroupIdentity` to inherit `defaultIdentityId` from their group. Credentials are stored once in an identity; hosts with separate credentials store their own. `knownHosts` belongs to its workspace. See [vault.example.json](vault.example.json) for a complete example
 
 Only Personal is exposed in the current interface. Creation, sharing, invitations, and transferring hosts or groups between workspaces are deferred until the workspace API is available. This change does not add workspace creation endpoints or migrations
 
-Open your username → **Host syncing** to set up syncing, sync now, or pause syncing. Changes upload automatically and the app checks the cloud every 30 seconds. Whole vaults replace earlier versions without merging; local edits take priority on the next upload. If local and cloud lists differ during setup, choose which to use. Before replacing local hosts the app saves `hosts-before-sync.json`. **Not now** keeps everything local. Signing out stops syncing.
+Open your username → **Host syncing** to set up syncing, sync now, or pause syncing. Changes upload automatically and the app checks the cloud every minute. Whole vaults replace earlier versions without merging; local edits take priority on the next upload. If local and cloud lists differ during setup, choose which to use. Before replacing local hosts the app saves `hosts-before-sync.json`. **Not now** keeps everything local. Signing out stops syncing.
 
-The provider is reached at `https://shell-aw.oxee.net/api` through the platform Nginx proxy. Login remains on the configured Oxee origin. Set `SHELLANYWHERE_PROVIDER_URL` to override the full provider API base for development or another deployment, for example `https://shell-aw.localhost/api`. Nginx forwards `/api/...` unchanged to the provider's Docker network alias `shell-aw`. Run the provider's `docker-compose.dev.yaml` alongside the platform, with a `shell-anywhere` bucket available in its configured S3 storage. The app uses msar for provider requests with Authorization and saves rotated refresh sessions. Sync metadata in `vault.json` is scoped to the signed-in account and server.
+The provider is reached at `https://shell-aw.oxee.net/api` through the platform Nginx proxy. Login remains on the configured Oxee origin. Set `SHELLANYWHERE_PROVIDER_URL` to override the full provider API base for development or another deployment, for example `https://shell-aw.oxee.localhost/api`. Nginx forwards `/api/...` unchanged to the provider's Docker network alias `shell-aw`. Run the provider's `docker-compose.dev.yaml` alongside the platform, with a `shell-anywhere` bucket available in its configured S3 storage. The app uses msar for provider requests with Authorization and saves rotated refresh sessions. Sync metadata in `vault.json` is scoped to the signed-in account and server.
 
-The app binds a temporary listener to `127.0.0.1` on an available port. Oxee stores that port in the pending request and returns a one-time authorization code to it after login/signup. Shell Anywhere accepts the callback only at `/oauth/<rid>` for its active request and exchanges the code with that request id. The server stores the code hash in `OAuthRequest.code` and deletes the request after a successful exchange. A separate `state` parameter is not used; rejected callbacks and failed exchanges leave the listener available for the valid callback. The listener closes on completion, cancellation, or after ten minutes. Refresh tokens stay in the operating system credential store under `shell-everywhere-oxee`, independently of SSH passwords and the browser session. They are never passed to the React UI or written to host configuration files.
+The app binds a temporary listener to `127.0.0.1` on an available port. Oxee stores that port in the pending request and returns a one-time authorization code to it after login/signup. Shell Anywhere accepts the callback only at `/oauth/<rid>` for its active request and exchanges the code with that request id. The server stores the code hash in `OAuthRequest.code` and deletes the request after a successful exchange. A separate `state` parameter is not used; rejected callbacks and failed exchanges leave the listener available for the valid callback. The listener closes on completion, cancellation, or after ten minutes. Refresh tokens stay in the operating system credential store under `shell-anywhere-oxee`, independently of SSH passwords and the browser session. They are never passed to the React UI or written to host configuration files.
+
+SSH passwords and key passphrases use the credential-store service `shell-anywhere-ssh`. Existing login and SSH credentials migrate when read, and sign-out or credential deletion clears both the current and old entries. The saved theme also migrates automatically
 
 The browser stays on Oxee and sends the callback in the background. The local listener permits CORS only from the configured Oxee origin and acknowledges success with the account identity after saving the session. It never returns refresh tokens to the browser. Oxee then shows an animated check, the connected account, and a message that the tab can be closed. If the local app cannot be reached or browser permission is denied, the page offers a retry without repeating login/signup. Some browsers request permission to connect to the local app.
 
-**Sign out** removes the saved local login and attempts to revoke its server session when Oxee is reachable. For a local platform deployment, set `SHELLANYWHERE_OXEE_URL` before launching the app. The current development default is `https://localhost`; use `https://oxee.net` for production. Overrides must use HTTPS, except loopback HTTP addresses for development. Certificate validation is skipped for `localhost` and loopback IP addresses only, including authenticated msar requests, so self-signed development certificates work without installing them in Windows. Remote HTTPS addresses use normal certificate validation. The platform users/sessions services and frontend must be deployed together for this flow.
+**Sign out** removes the saved local login and attempts to revoke its server session when Oxee is reachable. For a local platform deployment, set `SHELLANYWHERE_OXEE_URL` before launching the app. The built-in default is `https://oxee.net` for all builds. `make dev` supplies `https://oxee.localhost` through the environment override. Overrides must use HTTPS, except loopback HTTP addresses for development. Certificate validation is skipped for `localhost`, its `.localhost` subdomains, and loopback IP addresses only, including authenticated msar requests, so self-signed development certificates work without installing them in Windows. Remote HTTPS addresses use normal certificate validation. The platform users/sessions services and frontend must be deployed together for this flow.
 
 Authenticated API requests use the msar Go client. It captures issued access tokens, sends the `Authorization` header, manages refresh cookies, and supplies the Shell Anywhere platform header. Each restored account or revocation operation has an isolated cookie jar seeded from the system credential store; rotated refresh cookies are saved back there. Anonymous request creation and the one-time code exchange use ordinary HTTP without automatic retries.
 
@@ -65,6 +69,14 @@ Requirements: Go 1.25+, Node.js 24+, GNU Make, Wails v2.17, and the [Wails v2 pl
 ```powershell
 go install github.com/wailsapp/wails/v2/cmd/wails@v2.17.0
 npm --prefix frontend install
+make dev
+```
+
+The `make dev` target defaults to the local platform at `https://oxee.localhost` and the local provider at `https://shell-aw.oxee.localhost/api`. Existing environment overrides are preserved. If an older terminal exports `SHELLANYWHERE_OXEE_URL=https://localhost`, update it to `https://oxee.localhost`: the old address returns a `308` redirect
+
+```powershell
+$env:SHELLANYWHERE_OXEE_URL = "https://oxee.localhost"
+$env:SHELLANYWHERE_PROVIDER_URL = "https://shell-aw.oxee.localhost/api"
 make dev
 ```
 
@@ -127,7 +139,7 @@ The workflow runs the Go tests and frontend checks on native runners and attache
 The application version comes from the tag's three numeric components, so `v1.2.3-beta.1` uses file version `1.2.3` and keeps the full tag in the build comments
 Version components must be between 0 and 65535
 GitHub release builds use `https://oxee.net` as the default account server; `SHELLANYWHERE_OXEE_URL` can still override it at runtime
-Local development and local installer builds keep the localhost default
+Local builds and installers also default to `https://oxee.net`. `make dev` sets the local account and provider URLs through environment variables
 
 No custom secret is required for these builds: the workflow uses GitHub's built-in token with `contents: write` to upload the packages. Apple notarization would require separate Apple signing credentials
 To rebuild an existing release, rerun its workflow from the Actions tab; assets with the same names are replaced
@@ -137,8 +149,14 @@ The bottom-left footer shows the actual build version and checks the latest stab
 It shows **New version available** only when that release is newer, otherwise **Up to date**
 If no release exists or the request fails, the footer shows that state instead of claiming the app is current
 The result is cached for the app session, including failed checks; there is no periodic update check
+When a newer stable release is available, **Update to v…** downloads the matching Windows installer, macOS disk image, or Linux `.deb` directly from `Overwhelmed44/shell-everywhere` without visiting GitHub
+The app refreshes release metadata when clicked, accepts only the expected package for this operating system and architecture, and verifies its size and SHA-256 digest from GitHub before opening it
+Confirming the update downloads the package, opens the installer, and closes Shell Anywhere, ending active sessions and transfers
+Finish the Windows setup wizard, drag the macOS app into Applications, or use the Linux package installer, then reopen the app
+Linux requires a desktop handler for `.deb` packages; installations made from the portable archive still need to be updated manually
+Failed downloads or installer launches leave the app open and the update button available to retry; packages that are still building or lack a GitHub digest cannot be installed
 GitHub builds embed the full release tag, including prerelease suffixes; local builds use the product version from `wails.json`
 
 The React UI lives in `frontend/src`. `App.tsx` manages host and session state, while `components/` contains the dialogs, navigation, host list, cards, tabs, and session view. Shared TypeScript types are in `types.ts`, and the terminal implementation is in `TerminalPane.tsx`.
 
-Choose **Separate credentials**, a saved identity, or **Group default** when adding or editing a host. Separate password credentials are saved automatically; leave the password field blank while editing to keep them. When using a group without a default identity, the app asks for a password on connection. Identities are encrypted and synced alongside hosts, groups, and trusted server keys. On first connection, verify the displayed host-key fingerprint through a trusted channel before selecting **Trust & connect**
+Choose **Separate credentials**, a saved identity, or **Group default** when adding or editing a host. Separate password credentials are saved automatically; leave the password field blank while editing to keep them. When using a group without a default identity, the app asks for a password on connection. Identities sync alongside hosts, groups, and trusted server keys, with optional vault password encryption. On first connection, verify the displayed host-key fingerprint through a trusted channel before selecting **Trust & connect**

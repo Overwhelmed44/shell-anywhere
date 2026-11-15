@@ -199,7 +199,8 @@ func (a *App) saveVaultSession(origin string) error {
 }
 
 func (a *App) vaultRequest(ctx context.Context, method, path string, body any, target any) error {
-	response, err := a.vault.client.Request(ctx, method, a.vault.base+path, body)
+	endpoint := a.vault.base + "/v1" + path
+	response, err := a.vault.client.Request(ctx, method, endpoint, body)
 	if err == nil && response.StatusCode == http.StatusUnauthorized {
 		response.Body.Close()
 
@@ -213,7 +214,7 @@ func (a *App) vaultRequest(ctx context.Context, method, path string, body any, t
 			return errors.New("sign in with Oxee again to sync hosts")
 		}
 
-		response, err = a.vault.client.Request(ctx, method, a.vault.base+path, body)
+		response, err = a.vault.client.Request(ctx, method, endpoint, body)
 	}
 	if err != nil {
 		return errors.New("could not reach the sync server")
@@ -274,10 +275,6 @@ func (a *App) ConfigureVaultSync(password, direction string) (status VaultStatus
 	if err != nil {
 		return a.vault.status, err
 	}
-	if password == "" && len(a.vault.key.Key) != 32 {
-		return a.vault.status, errors.New("enter a vault password to encrypt your hosts and SSH credentials")
-	}
-
 	a.vault.status.Busy = true
 	a.vault.status.NeedsChoice = false
 	a.emit("vault:changed", a.vault.status)
@@ -419,8 +416,8 @@ func (a *App) SyncVault() (status VaultStatus, err error) {
 	if !a.vault.settings.Enabled || a.vault.status.Locked {
 		return a.vault.status, nil
 	}
-	if !a.vault.settings.Protected || len(a.vault.key.Key) != 32 {
-		return a.vault.status, errors.New("set a vault password in Host syncing to sync SSH credentials")
+	if a.vault.settings.Protected && len(a.vault.key.Key) != 32 {
+		return a.vault.status, errors.New("enter your vault password to unlock cloud hosts")
 	}
 
 	a.vault.status.Busy = true
@@ -472,9 +469,6 @@ func (a *App) SyncVault() (status VaultStatus, err error) {
 			a.vault.status.Locked = protected
 			a.vault.status.Protected = protected
 			return a.vault.status, decodeErr
-		}
-		if !protected {
-			return a.vault.status, errors.New("cloud vault is no longer encrypted; open Host syncing to restore encrypted syncing")
 		}
 		applied, applyErr := a.applyVault(cloud, vaultDigest(local))
 		if applyErr != nil {
@@ -532,7 +526,7 @@ func (a *App) signalVaultSync() {
 }
 
 func (a *App) runVaultSync(ctx context.Context) {
-	ticker := time.NewTicker(30 * time.Second)
+	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 
 	for {

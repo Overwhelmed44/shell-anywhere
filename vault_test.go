@@ -81,7 +81,7 @@ func (s *vaultServer) serve(t *testing.T, w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if r.URL.Path == "/api/private/vaults" {
+	if r.URL.Path == "/api/v1/private/vaults" {
 		var body struct{ Protected bool }
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		if s.blob == nil {
@@ -90,7 +90,7 @@ func (s *vaultServer) serve(t *testing.T, w http.ResponseWriter, r *http.Request
 		_ = json.NewEncoder(w).Encode(map[string]any{"suid": "0123456789abcdef01234567", "protected": s.protected})
 		return
 	}
-	if r.URL.Path != "/api/private/vaults/0123456789abcdef01234567" {
+	if r.URL.Path != "/api/v1/private/vaults/0123456789abcdef01234567" {
 		http.NotFound(w, r)
 		return
 	}
@@ -203,15 +203,10 @@ func TestProviderRefreshOnSeparateHost(t *testing.T) {
 func TestEncryptedVaultSyncAndCredentials(t *testing.T) {
 	t.Setenv("SHELLANYWHERE_PROVIDER_URL", "")
 	cloud := &vaultServer{}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { cloud.serve(t, w, r) }))
-	defer server.Close()
-	a := syncTestApp(t, server.URL)
+	a := cloud.testApp(t)
 	host, err := a.SaveHost(Host{Address: "private.example", Port: 22, AuthMethod: "password"}, "ssh-secret")
 	if err != nil {
 		t.Fatal(err)
-	}
-	if _, err := a.ConfigureVaultSync("", ""); err == nil || cloud.uploads != 0 {
-		t.Fatal("credentials must require a vault password before any upload")
 	}
 	status, err := a.ConfigureVaultSync("vault-secret", "")
 	if err != nil || !status.Enabled || !status.Protected || !cloud.protected {
@@ -230,14 +225,18 @@ func TestEncryptedVaultSyncAndCredentials(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	restored.accountURL, restored.accountLoaded, restored.account = server.URL, true, a.account
+	restored.accountURL, restored.accountLoaded, restored.account = a.accountURL, true, a.account
+	restored.accountHTTP = a.accountHTTP
 	restored.accounts, restored.vault.keys, restored.passwords = a.accounts, a.vault.keys, a.passwords
 	restored.eventSink = func(string, any) {}
 	status, err = restored.GetVaultStatus()
 	if err != nil || !status.Enabled || !status.Protected || status.Locked {
 		t.Fatalf("saved key restore: %+v, %v", status, err)
 	}
-	b := syncTestApp(t, server.URL)
+	b := cloud.testApp(t)
+	if status, err := b.ConfigureVaultSync("", ""); err == nil || !status.Locked || !status.Protected || cloud.uploads != 1 {
+		t.Fatal("existing encrypted vault was not kept locked")
+	}
 	if _, err := b.ConfigureVaultSync("wrong", ""); err == nil {
 		t.Fatal("wrong password accepted")
 	}
@@ -300,21 +299,29 @@ func TestEncryptedVaultSyncAndCredentials(t *testing.T) {
 }
 
 func TestFirstSyncChoiceAndLocalEditProtection(t *testing.T) {
+	for _, password := range []string{"", "vault-secret"} {
+		name := "without password"
+		if password != "" {
+			name = "with password"
+		}
+		t.Run(name, func(t *testing.T) { testFirstSyncChoiceAndLocalEditProtection(t, password) })
+	}
+}
+
+func testFirstSyncChoiceAndLocalEditProtection(t *testing.T, password string) {
 	t.Setenv("SHELLANYWHERE_PROVIDER_URL", "")
 	cloud := &vaultServer{}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { cloud.serve(t, w, r) }))
-	defer server.Close()
-	a, b := syncTestApp(t, server.URL), syncTestApp(t, server.URL)
+	a, b := cloud.testApp(t), cloud.testApp(t)
 	_, _ = a.SaveHost(Host{Address: "cloud.example", Port: 22, AuthMethod: "password"}, "secret")
 	_, _ = b.SaveHost(Host{Address: "local.example", Port: 22, AuthMethod: "password"}, "other-secret")
-	if _, err := a.ConfigureVaultSync("vault-secret", ""); err != nil {
+	if _, err := a.ConfigureVaultSync(password, ""); err != nil {
 		t.Fatal(err)
 	}
-	status, err := b.ConfigureVaultSync("vault-secret", "")
+	status, err := b.ConfigureVaultSync(password, "")
 	if err != nil || !status.NeedsChoice || cloud.uploads != 1 || b.hosts[0].Address != "local.example" {
 		t.Fatal("first sync overwrote data before choosing")
 	}
-	if _, err := b.ConfigureVaultSync("vault-secret", "download"); err != nil {
+	if _, err := b.ConfigureVaultSync(password, "download"); err != nil {
 		t.Fatal(err)
 	}
 	if b.hosts[0].Address != "cloud.example" {

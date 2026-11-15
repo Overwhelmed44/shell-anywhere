@@ -40,7 +40,7 @@ type Host struct {
 	SavedPassword    bool `json:"savedPassword"`
 }
 
-const passwordService = "shell-everywhere-ssh"
+const passwordService = "shell-anywhere-ssh"
 
 type passwordStore interface {
 	Set(string, string) error
@@ -51,10 +51,14 @@ type passwordStore interface {
 type systemPasswordStore struct{}
 
 func (systemPasswordStore) Set(id, password string) error {
-	return keyring.Set(passwordService, id, password)
+	return setCredential(passwordService, legacyPasswordService, id, password)
 }
-func (systemPasswordStore) Get(id string) (string, error) { return keyring.Get(passwordService, id) }
-func (systemPasswordStore) Delete(id string) error        { return keyring.Delete(passwordService, id) }
+func (systemPasswordStore) Get(id string) (string, error) {
+	return getCredential(passwordService, legacyPasswordService, id)
+}
+func (systemPasswordStore) Delete(id string) error {
+	return deleteCredential(passwordService, legacyPasswordService, id)
+}
 
 type ConnectResult struct {
 	Status      string `json:"status"`
@@ -127,7 +131,10 @@ func NewApp(configDir string) (*App, error) {
 		if err != nil {
 			return nil, err
 		}
-		configDir = filepath.Join(base, "shell-everywhere")
+		configDir, err = defaultConfigDir(base)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if err := os.MkdirAll(configDir, 0700); err != nil {
 		return nil, err

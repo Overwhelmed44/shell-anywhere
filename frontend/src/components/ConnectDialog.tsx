@@ -109,8 +109,8 @@ function ConnectDialog({
           {prompt.host.useGroupIdentity && !prompt.host.savedPassword
             ? "Use this password for this connection, or set a group identity to reuse saved credentials"
             : prompt.host.authMethod === "password"
-              ? "Your password is saved after connecting and included in encrypted syncing"
-              : "Your key passphrase is saved after connecting and included in encrypted syncing"}
+              ? "Your password is saved after connecting and included when syncing is enabled"
+              : "Your key passphrase is saved after connecting and included when syncing is enabled"}
         </div>
         {error && <div className="form-error">{error}</div>}
         <div className="modal-actions">

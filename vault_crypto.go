@@ -32,10 +32,11 @@ type vaultData struct {
 }
 
 type vaultEnvelope struct {
-	Version   int    `json:"version"`
-	Protected bool   `json:"protected"`
-	Salt      []byte `json:"salt"`
-	Encrypted []byte `json:"encrypted"`
+	Version   int             `json:"version"`
+	Protected bool            `json:"protected"`
+	Data      json.RawMessage `json:"data,omitempty"`
+	Salt      []byte          `json:"salt,omitempty"`
+	Encrypted []byte          `json:"encrypted,omitempty"`
 }
 
 type vaultKey struct {
@@ -55,11 +56,14 @@ func encodeVault(data []byte, key vaultKey) ([]byte, error) {
 	if json.Unmarshal(data, &contents) != nil || contents.Version != 1 {
 		return nil, errors.New("unsupported cloud vault format")
 	}
-	if len(key.Key) != 32 {
-		return nil, errors.New("a vault password is required to sync SSH credentials")
-	}
 	if err := validateVaultData(contents); err != nil {
 		return nil, err
+	}
+	if len(key.Key) == 0 {
+		return json.Marshal(vaultEnvelope{Version: 1, Data: data})
+	}
+	if len(key.Key) != 32 {
+		return nil, errors.New("invalid vault encryption key")
 	}
 
 	block, err := aes.NewCipher(key.Key)
@@ -90,7 +94,14 @@ func decodeVault(blob []byte, password string, saved vaultKey) ([]byte, vaultKey
 	}
 
 	if !envelope.Protected {
-		return nil, vaultKey{}, false, errors.New("SSH credentials require an encrypted vault")
+		var contents vaultData
+		if json.Unmarshal(envelope.Data, &contents) != nil {
+			return nil, vaultKey{}, false, errors.New("invalid cloud vault data")
+		}
+		if err := validateVaultData(contents); err != nil {
+			return nil, vaultKey{}, false, err
+		}
+		return envelope.Data, vaultKey{}, false, nil
 	}
 
 	if len(envelope.Salt) != 16 || len(envelope.Encrypted) < 28 {

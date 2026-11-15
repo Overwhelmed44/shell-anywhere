@@ -37,7 +37,10 @@ import "./App.css";
 
 const initialTheme: Theme = (() => {
   try {
-    return localStorage.getItem("shell-everywhere-theme") === "light"
+    return (
+      localStorage.getItem("shell-anywhere-theme") ??
+      localStorage.getItem("shell-everywhere-theme")
+    ) === "light"
       ? "light"
       : "dark";
   } catch {
@@ -117,6 +120,8 @@ function App() {
     latestVersion: "",
     state: isDesktop ? "checking" : "unavailable",
   });
+  const [updateBusy, setUpdateBusy] = useState(false);
+  const updateInFlight = useRef(false);
   const nextGroupId = useRef(0);
   const connectInFlight = useRef(false);
   const activeReconnectId = useRef<string | null>(null);
@@ -150,7 +155,8 @@ function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     try {
-      localStorage.setItem("shell-everywhere-theme", theme);
+      localStorage.setItem("shell-anywhere-theme", theme);
+      localStorage.removeItem("shell-everywhere-theme");
     } catch {
       /* Storage may be unavailable in preview mode. */
     }
@@ -751,11 +757,33 @@ function App() {
     }
   };
 
+  const installUpdate = async () => {
+    if (updateInFlight.current || update.state !== "update_available") return;
+    if (
+      !window.confirm(
+        `Update to v${update.latestVersion}? Shell Anywhere will download the installer and close so you can finish installing the update. Any active sessions and file transfers will end`,
+      )
+    )
+      return;
+    updateInFlight.current = true;
+    setUpdateBusy(true);
+    try {
+      await api.installUpdate();
+    } catch (err) {
+      setToast(errorText(err));
+    } finally {
+      updateInFlight.current = false;
+      setUpdateBusy(false);
+    }
+  };
+
   return (
     <div className={`app-shell${editor ? " has-editor" : ""}`}>
       <Sidebar
         onIdentities={openIdentities}
         update={update}
+        updateBusy={updateBusy}
+        onUpdate={() => void installUpdate()}
         account={account}
         accountBusy={accountBusy}
         onAccountAction={(action) => void accountAction(action)}

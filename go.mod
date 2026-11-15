@@ -1,4 +1,4 @@
-module shell-everywhere
+module shell-anywhere
 
 go 1.25.0
 

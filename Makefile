@@ -15,6 +15,8 @@ help:
 	@echo make installer - create the Windows setup executable
 	@echo make frontend  - run the browser-only frontend preview
 
+dev: export SHELLANYWHERE_OXEE_URL ?= https://oxee.localhost
+dev: export SHELLANYWHERE_PROVIDER_URL ?= https://shell-aw.oxee.localhost/api
 dev:
 ifeq ($(OS),Windows_NT)
 	powershell -NoProfile -Command "$$env:WAILS_DEV_ALLOWED_HOSTS = 'wails.localhost'; & '$(WAILS)' dev"

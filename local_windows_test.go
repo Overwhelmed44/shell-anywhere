@@ -33,7 +33,7 @@ func TestLocalShellSessions(t *testing.T) {
 			if err := app.ResizeSession(id, 24, 100); err != nil {
 				t.Fatal(err)
 			}
-			marker := "shell_everywhere_local_test"
+			marker := "shell_anywhere_local_test"
 			if err := app.WriteSession(id, "echo "+marker+"\r"); err != nil {
 				t.Fatal(err)
 			}

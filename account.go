@@ -22,23 +22,23 @@ import (
 	"github.com/zalando/go-keyring"
 )
 
-const accountService = "shell-everywhere-oxee"
+const accountService = "shell-anywhere-oxee"
 
-// Release builds set this with -ldflags; the environment override still takes precedence
-var defaultOxeeURL = "https://localhost"
+// All builds default to production; make dev supplies the environment override
+var defaultOxeeURL = "https://oxee.net"
 
 type systemAccountStore struct{}
 
 func (systemAccountStore) Set(id, value string) error {
-	return keyring.Set(accountService, id, value)
+	return setCredential(accountService, legacyAccountService, id, value)
 }
 
 func (systemAccountStore) Get(id string) (string, error) {
-	return keyring.Get(accountService, id)
+	return getCredential(accountService, legacyAccountService, id)
 }
 
 func (systemAccountStore) Delete(id string) error {
-	return keyring.Delete(accountService, id)
+	return deleteCredential(accountService, legacyAccountService, id)
 }
 
 type Account struct {
@@ -95,11 +95,8 @@ func (a *App) accountClient(origin string) *http.Client {
 	address, err := url.Parse(origin)
 
 	if err == nil {
-		host := strings.TrimSuffix(strings.ToLower(address.Hostname()), ".")
-		ip := net.ParseIP(host)
-
-		if host == "localhost" || (ip != nil && ip.IsLoopback()) {
-			// Only loopback development servers may use untrusted certificates.
+		if isLocalDevelopmentHost(address.Hostname()) {
+			// Localhost development servers may use untrusted certificates.
 			transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 		}
 	}
@@ -111,6 +108,12 @@ func (a *App) accountClient(origin string) *http.Client {
 			return http.ErrUseLastResponse
 		},
 	}
+}
+
+func isLocalDevelopmentHost(host string) bool {
+	host = strings.TrimSuffix(strings.ToLower(host), ".")
+	ip := net.ParseIP(host)
+	return host == "localhost" || strings.HasSuffix(host, ".localhost") || (ip != nil && ip.IsLoopback())
 }
 
 func (a *App) authenticatedAccountClient(origin, refresh string) (*msar.Client, http.CookieJar, error) {
@@ -156,9 +159,7 @@ type accountTransport struct {
 }
 
 func (t *accountTransport) RoundTrip(request *http.Request) (*http.Response, error) {
-	host := strings.TrimSuffix(strings.ToLower(request.URL.Hostname()), ".")
-	ip := net.ParseIP(host)
-	if host == "localhost" || (ip != nil && ip.IsLoopback()) {
+	if isLocalDevelopmentHost(request.URL.Hostname()) {
 		return t.local.RoundTrip(request)
 	}
 
@@ -169,6 +170,12 @@ func accountResponse(response *http.Response, target any) error {
 	defer response.Body.Close()
 
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		if response.StatusCode >= 300 && response.StatusCode < 400 {
+			target, err := url.Parse(response.Header.Get("Location"))
+			if err == nil && target.Host != "" && target.User == nil && (target.Scheme == "https" || target.Scheme == "http") {
+				return fmt.Errorf("Oxee returned %s; set SHELLANYWHERE_OXEE_URL to %s://%s", response.Status, target.Scheme, target.Host)
+			}
+		}
 		return fmt.Errorf("Oxee returned %s", response.Status)
 	}
 
