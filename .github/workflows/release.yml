@@ -61,8 +61,13 @@ jobs:
       - name: Install frontend dependencies
         run: npm --prefix frontend ci
 
-      - name: Build the frontend
-        run: npm --prefix frontend run build
+      - name: Build Windows x64 and ARM64 installers
+        run: |
+          wails build -platform windows/amd64,windows/arm64 -nsis -installscope user -ldflags "-X main.defaultOxeeURL=https://oxee.net -X main.appVersion=$env:RELEASE_TAG"
+          if ($LASTEXITCODE -ne 0) { throw 'Windows installer build failed' }
+          foreach ($arch in @('amd64', 'arm64')) {
+            if (-not (Test-Path "build/bin/ShellAnywhere-$arch-setup.exe")) { throw "Missing $arch installer" }
+          }
 
       - name: Test the application
         run: |
@@ -70,14 +75,6 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Go tests failed' }
           npm --prefix frontend run lint
           if ($LASTEXITCODE -ne 0) { throw 'Frontend checks failed' }
-
-      - name: Build Windows x64 and ARM64 installers
-        run: |
-          wails build -platform windows/amd64,windows/arm64 -nsis -installscope user -s -ldflags "-X main.defaultOxeeURL=https://oxee.net -X main.appVersion=$env:RELEASE_TAG"
-          if ($LASTEXITCODE -ne 0) { throw 'Windows installer build failed' }
-          foreach ($arch in @('amd64', 'arm64')) {
-            if (-not (Test-Path "build/bin/ShellAnywhere-$arch-setup.exe")) { throw "Missing $arch installer" }
-          }
 
       - name: Attach installers to the release
         env:
@@ -166,16 +163,13 @@ jobs:
       - name: Install frontend dependencies
         run: npm --prefix frontend ci
 
-      - name: Build the frontend
-        run: npm --prefix frontend run build
+      - name: Build the desktop app
+        run: wails build -platform "$BUILD_PLATFORM" -tags "${BUILD_TAGS:-}" -ldflags "-X main.defaultOxeeURL=https://oxee.net -X main.appVersion=$RELEASE_TAG"
 
       - name: Test the application
         run: |
           go test -tags "${BUILD_TAGS:-}" ./...
           npm --prefix frontend run lint
-
-      - name: Build the desktop app
-        run: wails build -platform "$BUILD_PLATFORM" -tags "${BUILD_TAGS:-}" -s -ldflags "-X main.defaultOxeeURL=https://oxee.net -X main.appVersion=$RELEASE_TAG"
 
       - name: Package macOS
         if: matrix.os == 'macos'
