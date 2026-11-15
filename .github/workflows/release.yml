@@ -61,15 +61,15 @@ jobs:
       - name: Install frontend dependencies
         run: npm --prefix frontend ci
 
+      - name: Build the frontend
+        run: npm --prefix frontend run build
+
       - name: Test the application
         run: |
           go test ./...
           if ($LASTEXITCODE -ne 0) { throw 'Go tests failed' }
           npm --prefix frontend run lint
           if ($LASTEXITCODE -ne 0) { throw 'Frontend checks failed' }
-
-      - name: Build the frontend
-        run: npm --prefix frontend run build
 
       - name: Build Windows x64 and ARM64 installers
         run: |
@@ -166,11 +166,13 @@ jobs:
       - name: Install frontend dependencies
         run: npm --prefix frontend ci
 
+      - name: Build the frontend
+        run: npm --prefix frontend run build
+
       - name: Test the application
         run: |
           go test -tags "${BUILD_TAGS:-}" ./...
           npm --prefix frontend run lint
-          npm --prefix frontend run build
 
       - name: Build the desktop app
         run: wails build -platform "$BUILD_PLATFORM" -tags "${BUILD_TAGS:-}" -s -ldflags "-X main.defaultOxeeURL=https://oxee.net -X main.appVersion=$RELEASE_TAG"
