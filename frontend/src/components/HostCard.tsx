@@ -71,17 +71,20 @@ export default function HostCard({
           {host.authMethod === "key" ? "KEY" : "PASSWORD"}
         </span>
         <div className="host-connect-actions">
-          <button
-            type="button"
-            disabled={connecting}
-            onClick={() => onFiles(host)}
-            title="Browse files with SFTP"
-          >
-            <FolderOpen size={15} /> SFTP
-          </button>
-          <button disabled={connecting} onClick={() => onConnect(host)}>
-            {connecting ? "Connecting…" : "SSH"} <ArrowRight size={15} />
-          </button>
+          { !connecting ? (
+            <>
+              <button
+                type="button"
+                onClick={() => onFiles(host)}
+                title="Browse files with SFTP"
+              >
+                <FolderOpen size={15} /> SFTP
+              </button>
+              <button onClick={() => onConnect(host)}>
+                { "SSH" } <ArrowRight size={15}/>
+              </button>
+            </>
+          ) : <button disabled>{ "Connecting..." }</button> }
         </div>
       </div>
     </div>

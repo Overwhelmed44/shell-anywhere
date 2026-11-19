@@ -565,7 +565,9 @@ function App() {
   };
   const startConnect = (host: Host, mode: "ssh" | "sftp" = "ssh") => {
     setConnectError("");
+    
     const prompt: AuthPrompt = { host, mode, password: "", passphrase: "" };
+
     if (host.authMethod === "key" || host.savedPassword) {
       void connect(prompt);
     } else {
@@ -582,6 +584,7 @@ function App() {
     const host = hosts.find((item) => item.id === session.host.id);
     if (!host) {
       setToast("This host was deleted. Save it again to reconnect.");
+
       return;
     }
     setConnectError("");
