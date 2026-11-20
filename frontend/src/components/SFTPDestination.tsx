@@ -98,16 +98,16 @@ export default function SFTPDestination({
             request.reconnectSessionId,
             request.host.workspaceId,
             request.host.id,
-            request.password,
+            "",
             request.passphrase,
-            request.fingerprint,
+            request.confirmation,
           )
         : await api.connectSFTP(
             request.host.workspaceId,
             request.host.id,
-            request.password,
+            "",
             request.passphrase,
-            request.fingerprint,
+            request.confirmation,
           );
 
       if (ticket !== attempt.current) {
@@ -116,10 +116,13 @@ export default function SFTPDestination({
         return;
       }
 
-      if (result.status === "host_key_unknown") {
+      if (result.status === "host_key_unknown" || result.status === "host_key_mismatch") {
         setPrompt({
           ...request,
           fingerprint: result.fingerprint,
+          confirmation: result.confirmation,
+          keyMismatch: result.status === "host_key_mismatch",
+          previousFingerprints: result.previousFingerprints,
           keyType: result.keyType,
         });
         return;
@@ -134,16 +137,7 @@ export default function SFTPDestination({
         throw new Error("The SFTP connection closed before it was ready");
       }
 
-      let host = request.host;
-      if (request.password && !host.identityId && !host.useGroupIdentity) {
-        try {
-          host = await api.saveHost(host, request.password);
-        } catch (reason) {
-          setError(
-            `Connected, but password could not be saved: ${errorText(reason)}`,
-          );
-        }
-      }
+      const host = request.host;
 
       if (ticket !== attempt.current) {
         void api.disconnectSession(result.sessionId).catch(() => {});
@@ -166,7 +160,9 @@ export default function SFTPDestination({
     } catch (reason) {
       if (ticket === attempt.current) {
         setError(errorText(reason));
-        setPrompt(request);
+        setPrompt(null);
+        setConnectingHost(null);
+        callbacks.current.onBusyChange(false);
       }
     } finally {
       inFlight.current = false;
@@ -198,13 +194,11 @@ export default function SFTPDestination({
     const request: AuthPrompt = {
       host,
       mode: "sftp",
-      password: "",
       passphrase: "",
     };
     setConnectingHost(host);
     callbacks.current.onBusyChange(true);
-    if (host.authMethod === "key" || host.savedPassword) void connect(request);
-    else setPrompt(request);
+    void connect(request);
   };
 
   const reconnect = () => {
@@ -219,12 +213,10 @@ export default function SFTPDestination({
       host,
       mode: "sftp",
       reconnectSessionId: destination.id,
-      password: "",
       passphrase: "",
     };
     callbacks.current.onBusyChange(true);
-    if (host.authMethod === "key" || host.savedPassword) void connect(request);
-    else setPrompt(request);
+    void connect(request);
   };
 
   const selected = connectingHost ?? destination?.host;
@@ -285,7 +277,6 @@ export default function SFTPDestination({
         <ConnectDialog
           prompt={prompt}
           busy={busy}
-          error={error}
           onChange={setPrompt}
           onConnect={() => void connect(prompt)}
           onClose={cancel}

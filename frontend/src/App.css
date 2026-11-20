@@ -2038,7 +2038,7 @@
 .modal-heading {
   display: flex;
   justify-content: space-between;
-  align-items: start;
+  align-items: center;
 }
 
 .modal h2 {

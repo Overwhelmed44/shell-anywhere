@@ -4,6 +4,7 @@ import { api, type Group, type Host, type Identity } from "../api";
 import { errorText } from "../utils";
 import Dropdown from "./Dropdown";
 import EditorSidebar from "./EditorSidebar";
+import { useSavedPassword } from "../useSavedPassword";
 
 type Props = {
   identities: Identity[];
@@ -30,13 +31,20 @@ export default function IdentitiesDialog({
   onClose,
 }: Props) {
   const [draft, setDraft] = useState<Identity | null>(null);
-  const [password, setPassword] = useState("");
   const [passphrase, setPassphrase] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const container = useRef<HTMLDivElement>(null);
   const editing = draft !== null;
+  const passwordIdentityId = draft?.id ?? "";
+  const hasSavedPassword = Boolean(
+    identities.find((identity) => identity.id === passwordIdentityId)
+      ?.savedPassword,
+  );
+
+  const { password, setPassword, loadingPassword, passwordError } =
+    useSavedPassword("identity", hasSavedPassword ? passwordIdentityId : "");
 
   useEffect(() => {
     const element = container.current;
@@ -60,7 +68,7 @@ export default function IdentitiesDialog({
 
   const save = async (event: FormEvent) => {
     event.preventDefault();
-    if (!draft || busy) return;
+    if (!draft || busy || loadingPassword) return;
     setBusy(true);
     setError("");
     try {
@@ -100,7 +108,6 @@ export default function IdentitiesDialog({
             defaultGroups.some((group) => group.id === host.groupId)),
       )
     : [];
-  const saved = identities.find((identity) => identity.id === draft?.id);
 
   return (
     <EditorSidebar
@@ -163,17 +170,16 @@ export default function IdentitiesDialog({
               <label className="field connection-auth-type">
                 Password
                 <input
-                  type="password"
-                  autoComplete="new-password"
+                  type="text"
+                  autoComplete="off"
+                  spellCheck={false}
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   placeholder={
-                    saved?.savedPassword
-                      ? "Leave blank to keep saved password"
-                      : "Enter SSH password"
+                    loadingPassword ? "Loading password…" : "Enter SSH password"
                   }
-                  required={!saved?.savedPassword}
-                  disabled={busy}
+                  required
+                  disabled={busy || loadingPassword}
                 />
               </label>
             ) : (
@@ -222,12 +228,6 @@ export default function IdentitiesDialog({
               Changes apply to future connections from every host using this
               identity
             </p>
-            {draft.authMethod === "password" && saved?.savedPassword && (
-              <p className="vault-note saved-password-note">
-                A password is already saved. Leave the password field blank to
-                keep it, or enter a new one to replace it
-              </p>
-            )}
             {confirmDelete && (
               <div className="identity-delete-confirm" role="alert">
                 <strong>Delete “{draft.name}”?</strong>
@@ -259,9 +259,9 @@ export default function IdentitiesDialog({
                 </div>
               </div>
             )}
-            {error && (
+            {(error || passwordError) && (
               <div className="form-error" role="alert">
-                {error}
+                {error || passwordError}
               </div>
             )}
             <div className="modal-actions">
@@ -287,7 +287,7 @@ export default function IdentitiesDialog({
               <button
                 type="submit"
                 className="button primary"
-                disabled={busy || confirmDelete}
+                disabled={busy || confirmDelete || loadingPassword}
               >
                 {busy ? "Saving…" : "Save identity"}
               </button>

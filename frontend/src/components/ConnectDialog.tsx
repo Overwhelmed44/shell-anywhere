@@ -1,17 +1,15 @@
-import { ArrowRight, Copy, LockKeyhole, ShieldCheck, X } from "lucide-react";
+import { ArrowRight, Copy, ShieldCheck, X } from "lucide-react";
 import type { AuthPrompt } from "../types";
 
 function ConnectDialog({
   prompt,
   busy,
-  error,
   onChange,
   onConnect,
   onClose,
 }: {
   prompt: AuthPrompt;
   busy: boolean;
-  error: string;
   onChange: (prompt: AuthPrompt) => void;
   onConnect: () => void;
   onClose: () => void;
@@ -21,7 +19,7 @@ function ConnectDialog({
     <div
       className="modal-backdrop p-5"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
+        if (!busy && event.target === event.currentTarget) onClose();
       }}
     >
       <div
@@ -34,23 +32,33 @@ function ConnectDialog({
           <div className="modal-icon">
             <ShieldCheck size={22} />
           </div>
-          <button className="icon-button" onClick={onClose} aria-label="Close">
+          <button className="icon-button" onClick={onClose} aria-label="Close" disabled={busy}>
             <X size={18} />
           </button>
         </div>
         <h2 id="connect-dialog-title">
-          {confirmingKey
-            ? "Verify this server"
-            : `${prompt.reconnectSessionId ? "Reconnect to" : "Connect to"} ${prompt.host.name}${prompt.mode === "sftp" ? " over SFTP" : ""}`}
+          {prompt.keyMismatch
+            ? "Server key has changed"
+            : confirmingKey
+              ? "Verify this server"
+              : `${prompt.reconnectSessionId ? "Reconnect to" : "Connect to"} ${prompt.host.name}${prompt.mode === "sftp" ? " over SFTP" : ""}`}
         </h2>
         <p className="modal-intro">
-          {confirmingKey
-            ? "This server is new to Shell Anywhere. Check its fingerprint against a trusted source before continuing"
-            : `${prompt.host.username}@${prompt.host.address}:${prompt.host.port}`}
+          {prompt.keyMismatch
+            ? `The key from ${prompt.host.username}@${prompt.host.address}:${prompt.host.port} does not match its saved key. This can happen after a server reinstall or if the connection is being intercepted. Verify the new fingerprint before overwriting the saved key`
+            : confirmingKey
+              ? "This server is new to Shell Anywhere. Check its fingerprint against a trusted source before continuing"
+              : `${prompt.host.username}@${prompt.host.address}:${prompt.host.port}`}
         </p>
+        {prompt.keyMismatch && [...new Set(prompt.previousFingerprints)].map((fingerprint) => (
+          <div className="fingerprint" key={fingerprint}>
+            <span>Saved fingerprint</span>
+            <code>{fingerprint}</code>
+          </div>
+        ))}
         {confirmingKey ? (
           <div className="fingerprint">
-            <span>{prompt.keyType} fingerprint</span>
+            <span>{prompt.keyMismatch ? "New " : ""}{prompt.keyType} fingerprint</span>
             <code>{prompt.fingerprint}</code>
             <button
               type="button"
@@ -63,28 +71,6 @@ function ConnectDialog({
               <Copy size={15} />
             </button>
           </div>
-        ) : prompt.host.authMethod === "password" ? (
-          <label className="field">
-            {prompt.host.savedPassword
-              ? "Password override (optional)"
-              : "Password"}
-            <input
-              type="password"
-              autoFocus={!prompt.host.savedPassword}
-              value={prompt.password}
-              onChange={(event) =>
-                onChange({ ...prompt, password: event.target.value })
-              }
-              onKeyDown={(event) => {
-                if (event.key === "Enter") onConnect();
-              }}
-              placeholder={
-                prompt.host.savedPassword
-                  ? "Leave blank to use saved password"
-                  : "Enter SSH password"
-              }
-            />
-          </label>
         ) : (
           <label className="field">
             <span>
@@ -104,19 +90,10 @@ function ConnectDialog({
             />
           </label>
         )}
-        <div className="privacy-note">
-          <LockKeyhole size={14} />{" "}
-          {prompt.host.useGroupIdentity && !prompt.host.savedPassword
-            ? "Use this password for this connection, or set a group identity to reuse saved credentials"
-            : prompt.host.authMethod === "password"
-              ? "Your password is saved after connecting and included when syncing is enabled"
-              : "Your key passphrase is saved after connecting and included when syncing is enabled"}
-        </div>
-        {error && <div className="form-error">{error}</div>}
         <div className="modal-actions">
           <span className="spacer" />
-          <button className="button secondary" onClick={onClose}>
-            Cancel
+          <button className="button secondary" onClick={onClose} disabled={busy} autoFocus={prompt.keyMismatch}>
+            {prompt.keyMismatch ? "Abort connection" : "Cancel"}
           </button>
           <button
             className="button primary"
@@ -125,11 +102,13 @@ function ConnectDialog({
           >
             {busy
               ? "Connecting…"
-              : confirmingKey
-                ? "Trust & connect"
-                : prompt.reconnectSessionId
-                  ? "Reconnect"
-                  : "Connect"}{" "}
+              : prompt.keyMismatch
+                ? "Overwrite key & connect"
+                : confirmingKey
+                  ? "Trust & connect"
+                  : prompt.reconnectSessionId
+                    ? "Reconnect"
+                    : "Connect"}{" "}
             <ArrowRight size={15} />
           </button>
         </div>

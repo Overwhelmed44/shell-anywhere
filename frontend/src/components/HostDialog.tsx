@@ -5,6 +5,7 @@ import { errorText } from "../utils";
 import GroupSelect from "./GroupSelect";
 import Dropdown from "./Dropdown";
 import EditorSidebar from "./EditorSidebar";
+import { useSavedPassword } from "../useSavedPassword";
 
 function HostDialog({
   host,
@@ -35,7 +36,6 @@ function HostDialog({
   }));
   const credentialsChosen = useRef(false);
   const [inheritedAtOpen] = useState(host.useGroupIdentity);
-  const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -79,8 +79,23 @@ function HostDialog({
   const selectedIdentity = draft.useGroupIdentity
     ? defaultIdentity
     : identities.find((identity) => identity.id === draft.identityId);
+  const passwordIdentityId =
+    selectedIdentity?.authMethod === "password" && selectedIdentity.savedPassword
+      ? selectedIdentity.id
+      : "";
+  const loadOwnPassword =
+    ownCredentials && ownSavedPassword && draft.authMethod === "password";
+
+  const { password, setPassword, loadingPassword, passwordError } =
+    useSavedPassword(
+      passwordIdentityId ? "identity" : "host",
+      passwordIdentityId || (loadOwnPassword ? host.id : ""),
+      host.workspaceId,
+    );
+
   const save = async (event: FormEvent) => {
     event.preventDefault();
+    if (busy || loadingPassword) return;
     setBusy(true);
     setError("");
     try {
@@ -175,7 +190,7 @@ function HostDialog({
                 ? [
                     {
                       value: "group",
-                      label: `Group default — ${defaultIdentity?.name ?? "ask when connecting"}`,
+                      label: `Group default — ${defaultIdentity?.name ?? "no identity selected"}`,
                     },
                   ]
                 : []),
@@ -198,8 +213,24 @@ function HostDialog({
           <p className="vault-note identity-note">
             {selectedIdentity
               ? `Uses ${selectedIdentity.username} with ${selectedIdentity.authMethod === "key" ? "an SSH key" : "a password"} from ${selectedIdentity.name}`
-              : "No group default is selected yet, so the app will ask for a password when connecting"}
+              : "Choose a group identity or separate credentials before connecting"}
           </p>
+        )}
+        {!ownCredentials && selectedIdentity?.authMethod === "password" && (
+          <label className="field connection-auth-type">
+            Password from {selectedIdentity.name}
+            <input
+              type="text"
+              value={password}
+              readOnly
+              disabled={loadingPassword}
+              placeholder={
+                loadingPassword ? "Loading password…" : "No saved password"
+              }
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </label>
         )}
         {ownCredentials && (
           <>
@@ -236,19 +267,19 @@ function HostDialog({
                 <label className="field saved-password-field">
                   Password
                   <input
-                    type="password"
+                    type="text"
                     value={password}
                     onChange={(event) => {
                       credentialsChosen.current = true;
                       setPassword(event.target.value);
                     }}
                     placeholder={
-                      ownSavedPassword
-                        ? "Leave blank to keep saved password"
-                        : "Enter SSH password"
+                      loadingPassword ? "Loading password…" : "Enter SSH password"
                     }
-                    required={!ownSavedPassword}
-                    autoComplete="new-password"
+                    required
+                    disabled={loadingPassword}
+                    autoComplete="off"
+                    spellCheck={false}
                   />
                 </label>
               )}
@@ -283,7 +314,9 @@ function HostDialog({
             </div>
           </>
         )}
-        {error && <div className="form-error">{error}</div>}
+        {(error || passwordError) && (
+          <div className="form-error">{error || passwordError}</div>
+        )}
         <div className="modal-actions">
           {host.id && (
             <button
@@ -298,7 +331,11 @@ function HostDialog({
           <button className="button secondary" type="button" onClick={onClose}>
             Cancel
           </button>
-          <button className="button primary" type="submit" disabled={busy}>
+          <button
+            className="button primary"
+            type="submit"
+            disabled={busy || loadingPassword}
+          >
             {busy ? "Saving…" : "Save host"}
           </button>
         </div>

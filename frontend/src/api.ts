@@ -38,9 +38,11 @@ export type WorkspaceView = {
 };
 
 export type ConnectResult = {
-  status: "connected" | "host_key_unknown" | "passphrase_required";
+  status: "connected" | "host_key_unknown" | "host_key_mismatch" | "passphrase_required";
   sessionId?: string;
   fingerprint?: string;
+  confirmation?: string;
+  previousFingerprints?: string[];
   keyType?: string;
 };
 
@@ -156,6 +158,8 @@ type Backend = {
   GetWorkspace(): Promise<WorkspaceView>;
   ListGroups(): Promise<Group[]>;
   ListIdentities(): Promise<Identity[]>;
+  GetHostPassword(id: string): Promise<string>;
+  GetIdentityPassword(id: string): Promise<string>;
   CreateGroup(name: string): Promise<Group>;
   SaveGroup(group: Group): Promise<Group>;
   SaveIdentity(
@@ -298,6 +302,8 @@ export const api = {
   syncVault: () => backend().SyncVault(),
   pauseVaultSync: () => backend().PauseVaultSync(),
   listHosts: () => backend().ListHosts(),
+  getHostPassword: (id: string) => backend().GetHostPassword(id),
+  getIdentityPassword: (id: string) => backend().GetIdentityPassword(id),
   listGroups: () => backend().ListGroups(),
   getWorkspace: () => backend().GetWorkspace(),
   saveGroup: (group: Group) => backend().SaveGroup(group),

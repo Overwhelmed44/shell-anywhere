@@ -433,8 +433,8 @@ func TestUnknownAndChangedHostKeys(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "known_hosts"), []byte(line+"\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	_, err = app.ConnectHost(host.ID, "secret", "", result.Fingerprint)
-	if err == nil || !strings.Contains(err.Error(), "host key verification failed") {
-		t.Fatalf("changed host key must be rejected, got %v", err)
+	changed, err := app.ConnectHost(host.ID, "secret", "", result.Fingerprint)
+	if err != nil || changed.Status != "host_key_mismatch" || changed.Fingerprint != result.Fingerprint {
+		t.Fatalf("changed host key must require a separate replacement confirmation: %+v, %v", changed, err)
 	}
 }

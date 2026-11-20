@@ -36,9 +36,11 @@ export type AuthPrompt = {
   mode?: "ssh" | "sftp";
   host: Host;
   reconnectSessionId?: string;
-  password: string;
   passphrase: string;
   fingerprint?: string;
+  confirmation?: string;
+  keyMismatch?: boolean;
+  previousFingerprints?: string[];
   keyType?: string;
 };
 export type Theme = "dark" | "light";

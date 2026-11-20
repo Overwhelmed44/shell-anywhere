@@ -65,10 +65,12 @@ func (systemPasswordStore) Delete(id string) error {
 }
 
 type ConnectResult struct {
-	Status      string `json:"status"`
-	SessionID   string `json:"sessionId,omitempty"`
-	Fingerprint string `json:"fingerprint,omitempty"`
-	KeyType     string `json:"keyType,omitempty"`
+	Status               string   `json:"status"`
+	SessionID            string   `json:"sessionId,omitempty"`
+	Fingerprint          string   `json:"fingerprint,omitempty"`
+	KeyType              string   `json:"keyType,omitempty"`
+	Confirmation         string   `json:"confirmation,omitempty"`
+	PreviousFingerprints []string `json:"previousFingerprints,omitempty"`
 }
 
 type terminalEvent struct {
@@ -216,8 +218,10 @@ func (a *App) ChooseKey() (string, error) {
 }
 
 type unknownHostKey struct {
-	fingerprint string
-	keyType     string
+	fingerprint          string
+	keyType              string
+	changed              bool
+	previousFingerprints []string
 }
 
 func (e *unknownHostKey) Error() string { return "host key has not been trusted" }
@@ -270,6 +274,7 @@ func (a *App) connectHost(sessionID, workspaceID, hostID, password, passphrase, 
 		return ConnectResult{}, fmt.Errorf("read known hosts: %w", err)
 	}
 	var acceptedKey ssh.PublicKey
+	var replaceKey bool
 	config := &ssh.ClientConfig{
 		User:    host.Username,
 		Timeout: 12 * time.Second,
@@ -279,12 +284,18 @@ func (a *App) connectHost(sessionID, workspaceID, hostID, password, passphrase, 
 				return nil
 			}
 			var keyError *knownhosts.KeyError
-			if !errors.As(err, &keyError) || len(keyError.Want) != 0 {
+			if !errors.As(err, &keyError) {
 				return fmt.Errorf("host key verification failed; the saved key may have changed: %w", err)
 			}
 			fingerprint := ssh.FingerprintSHA256(key)
-			if trustedFingerprint != fingerprint {
-				return &unknownHostKey{fingerprint: fingerprint, keyType: key.Type()}
+			changed := len(keyError.Want) != 0
+			replaceKey = trustedFingerprint == "replace:"+fingerprint
+			if (changed && !replaceKey) || (!changed && trustedFingerprint != fingerprint && !replaceKey) {
+				previous := []string{}
+				for _, known := range keyError.Want {
+					previous = append(previous, ssh.FingerprintSHA256(known.Key))
+				}
+				return &unknownHostKey{fingerprint: fingerprint, keyType: key.Type(), changed: changed, previousFingerprints: previous}
 			}
 			acceptedKey = key
 			return nil
@@ -298,7 +309,7 @@ func (a *App) connectHost(sessionID, workspaceID, hostID, password, passphrase, 
 			}
 		}
 		if password == "" {
-			return ConnectResult{}, errors.New("enter the SSH password")
+			return ConnectResult{}, errors.New("set an SSH password in host settings or its identity settings")
 		}
 		config.Auth = []ssh.AuthMethod{ssh.Password(password)}
 	} else {
@@ -335,25 +346,21 @@ func (a *App) connectHost(sessionID, workspaceID, hostID, password, passphrase, 
 	if err != nil {
 		var challenge *unknownHostKey
 		if errors.As(err, &challenge) {
-			return ConnectResult{Status: "host_key_unknown", Fingerprint: challenge.fingerprint, KeyType: challenge.keyType}, nil
+			status, confirmation := "host_key_unknown", challenge.fingerprint
+			if challenge.changed {
+				status, confirmation = "host_key_mismatch", "replace:"+challenge.fingerprint
+			}
+			return ConnectResult{Status: status, Fingerprint: challenge.fingerprint, KeyType: challenge.keyType, Confirmation: confirmation, PreviousFingerprints: challenge.previousFingerprints}, nil
 		}
 		return ConnectResult{}, fmt.Errorf("connect to %s: %w", address, err)
 	}
 	if acceptedKey != nil {
 		a.mu.Lock()
-		line := knownhosts.Line([]string{knownhosts.Normalize(address)}, acceptedKey)
-		file, err := os.OpenFile(knownHostsPath, os.O_APPEND|os.O_WRONLY, 0600)
+		err = persistTrustedHostKey(knownHostsPath, address, client.RemoteAddr(), acceptedKey, replaceKey)
+		a.mu.Unlock()
 		if err != nil {
-			a.mu.Unlock()
 			_ = client.Close()
 			return ConnectResult{}, err
-		}
-		_, err = fmt.Fprintln(file, line)
-		closeErr := file.Close()
-		a.mu.Unlock()
-		if err != nil || closeErr != nil {
-			_ = client.Close()
-			return ConnectResult{}, errors.Join(err, closeErr)
 		}
 		a.signalVaultSync()
 	}

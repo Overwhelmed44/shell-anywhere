@@ -102,7 +102,6 @@ function App() {
   const [reconnectingSessionId, setReconnectingSessionId] = useState<
     string | null
   >(null);
-  const [connectError, setConnectError] = useState("");
   const [query, setQuery] = useState("");
   const [selectedGroup, setSelectedGroup] = useState("All hosts");
   const [toast, setToast] = useState("");
@@ -427,7 +426,6 @@ function App() {
     setConnecting(true);
     setConnectingHostId(prompt.host.id);
     setReconnectingSessionId(prompt.reconnectSessionId ?? null);
-    setConnectError("");
     try {
       const result =
         prompt.mode === "sftp"
@@ -436,39 +434,42 @@ function App() {
                 prompt.reconnectSessionId,
                 prompt.host.workspaceId,
                 prompt.host.id,
-                prompt.password,
+                "",
                 prompt.passphrase,
-                prompt.fingerprint,
+                prompt.confirmation,
               )
             : await api.connectSFTP(
                 prompt.host.workspaceId,
                 prompt.host.id,
-                prompt.password,
+                "",
                 prompt.passphrase,
-                prompt.fingerprint,
+                prompt.confirmation,
               )
           : prompt.reconnectSessionId
             ? await api.reconnectHost(
                 prompt.reconnectSessionId,
                 prompt.host.id,
-                prompt.password,
+                "",
                 prompt.passphrase,
-                prompt.fingerprint,
+                prompt.confirmation,
                 prompt.host.workspaceId,
               )
             : await api.connectHost(
                 prompt.host.id,
-                prompt.password,
+                "",
                 prompt.passphrase,
-                prompt.fingerprint,
+                prompt.confirmation,
                 prompt.host.workspaceId,
               );
       if (result.status === "passphrase_required") {
         setAuthPrompt(prompt);
-      } else if (result.status === "host_key_unknown") {
+      } else if (result.status === "host_key_unknown" || result.status === "host_key_mismatch") {
         setAuthPrompt({
           ...prompt,
           fingerprint: result.fingerprint,
+          confirmation: result.confirmation,
+          keyMismatch: result.status === "host_key_mismatch",
+          previousFingerprints: result.previousFingerprints,
           keyType: result.keyType,
         });
       } else if (result.sessionId) {
@@ -482,26 +483,7 @@ function App() {
           return;
         }
         const closedReason = closedDuringConnect.current.get(result.sessionId);
-        let connectedHost = prompt.host;
-        if (
-          prompt.host.authMethod === "password" &&
-          prompt.password &&
-          !prompt.host.identityId &&
-          !prompt.host.useGroupIdentity
-        ) {
-          try {
-            connectedHost = await api.saveHost(prompt.host, prompt.password);
-            setHosts((old) =>
-              old.map((host) =>
-                host.id === connectedHost.id ? connectedHost : host,
-              ),
-            );
-          } catch (err) {
-            setToast(
-              `Connected, but password could not be saved: ${errorText(err)}`,
-            );
-          }
-        }
+        const connectedHost = prompt.host;
         if (prompt.reconnectSessionId) {
           const reconnectId = prompt.reconnectSessionId;
           setSessions((old) =>
@@ -549,8 +531,8 @@ function App() {
         setAuthPrompt(null);
       }
     } catch (err) {
-      setAuthPrompt(prompt);
-      setConnectError(errorText(err));
+      setAuthPrompt(null);
+      setToast(errorText(err));
     } finally {
       if (prompt.reconnectSessionId) {
         closedDuringReconnect.current.delete(prompt.reconnectSessionId);
@@ -564,15 +546,8 @@ function App() {
     }
   };
   const startConnect = (host: Host, mode: "ssh" | "sftp" = "ssh") => {
-    setConnectError("");
-    
-    const prompt: AuthPrompt = { host, mode, password: "", passphrase: "" };
-
-    if (host.authMethod === "key" || host.savedPassword) {
-      void connect(prompt);
-    } else {
-      setAuthPrompt(prompt);
-    }
+    const prompt: AuthPrompt = { host, mode, passphrase: "" };
+    void connect(prompt);
   };
   const startReconnect = (session: Session) => {
     if (
@@ -587,19 +562,13 @@ function App() {
 
       return;
     }
-    setConnectError("");
     const prompt: AuthPrompt = {
       host,
       reconnectSessionId: session.id,
       mode: session.kind,
-      password: "",
       passphrase: "",
     };
-    if (host.authMethod === "key" || host.savedPassword) {
-      void connect(prompt);
-    } else {
-      setAuthPrompt(prompt);
-    }
+    void connect(prompt);
   };
   const closeTab = (id: string) => {
     const fileGroup = splitGroups.find(
@@ -936,7 +905,6 @@ function App() {
         <ConnectDialog
           prompt={authPrompt}
           busy={connecting}
-          error={connectError}
           onChange={setAuthPrompt}
           onConnect={() => void connect(authPrompt)}
           onClose={() => setAuthPrompt(null)}
