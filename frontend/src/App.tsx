@@ -817,7 +817,6 @@ function App() {
           }
           theme={theme}
           onToggleTheme={() => setTheme(theme === "dark" ? "light" : "dark")}
-          onAbout={() => setToast("Shell Anywhere — Go, React, and Wails")}
           onStartLocal={(shell, name) => void startLocalShell(shell, name)}
         />
         <SessionTabs

@@ -23,8 +23,8 @@ func main() {
 	}
 	if err := wails.Run(&options.App{
 		Title:       "Shell Anywhere",
-		Width:       1320,
-		Height:      860,
+		Width:       1280,
+		Height:      720,
 		MinWidth:    900,
 		MinHeight:   600,
 		AssetServer: &assetserver.Options{Assets: assets},

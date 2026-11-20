@@ -105,6 +105,7 @@ export type VaultStatus = {
 };
 
 type Backend = {
+  OpenExternalLink(url: string): Promise<void>;
   ConnectSFTP(
     workspaceId: string,
     hostId: string,
@@ -222,6 +223,7 @@ function backend(): Backend {
 }
 
 export const api = {
+  openExternalLink: (url: string) => backend().OpenExternalLink(url),
   connectSFTP: (
     workspaceId: string,
     hostId: string,

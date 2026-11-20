@@ -2,13 +2,12 @@ import { CircleHelp, Moon, Sun } from "lucide-react";
 import type { LocalShell, Theme } from "../types";
 import LocalTerminalMenu from "./LocalTerminalMenu";
 import AccountMenu from "./AccountMenu";
-import type { AccountAction, AccountStatus, VaultStatus } from "../api";
+import { api, type AccountAction, type AccountStatus, type VaultStatus } from "../api";
 
 type Props = {
   label: string;
   theme: Theme;
   onToggleTheme: () => void;
-  onAbout: () => void;
   onStartLocal: (shell: LocalShell, name: string) => void;
   account: AccountStatus;
   accountBusy: boolean;
@@ -21,7 +20,6 @@ export default function Topbar({
   label,
   theme,
   onToggleTheme,
-  onAbout,
   onStartLocal,
   account,
   accountBusy,
@@ -51,7 +49,10 @@ export default function Topbar({
         <button
           className="icon-button"
           title="About this app"
-          onClick={onAbout}
+          aria-label="About this app"
+          onClick={() =>
+            void api.openExternalLink("https://oxee.net/services/shell-anywhere")
+          }
         >
           <CircleHelp size={18} />
         </button>

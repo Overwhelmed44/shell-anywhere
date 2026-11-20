@@ -23,6 +23,10 @@ import (
 	"golang.org/x/crypto/ssh/knownhosts"
 )
 
+func (a *App) OpenExternalLink(url string) {
+	runtime.BrowserOpenURL(a.ctx, url)
+}
+
 type Host struct {
 	ID               string `json:"id"`
 	Name             string `json:"name"`
