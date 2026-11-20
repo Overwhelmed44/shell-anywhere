@@ -31,6 +31,8 @@ func TestReleaseComparisonAndUnavailableStates(t *testing.T) {
 		code                       int
 	}{
 		{"newer", "1.0.0", `{"tag_name":"v1.1.0"}`, "update_available", 200},
+		{"patch update before 1.0", "0.1.0", `{"tag_name":"v0.1.1"}`, "update_available", 200},
+		{"current patch before 1.0", "0.1.1", `{"tag_name":"v0.1.1"}`, "up_to_date", 200},
 		{"numeric ordering", "1.9.0", `{"tag_name":"v1.10.0"}`, "update_available", 200},
 		{"same", "1.0.0", `{"tag_name":"v1.0.0"}`, "up_to_date", 200},
 		{"installed newer", "2.0.0", `{"tag_name":"v1.0.0"}`, "up_to_date", 200},
@@ -121,10 +123,23 @@ func TestAppVersionMatchesEmbeddedConfigurationOrReleaseTag(t *testing.T) {
 	if appVersion != "" && version != strings.TrimPrefix(appVersion, "v") {
 		t.Fatal("full release tag was lost")
 	}
+	if appVersion == "" {
+		var config struct {
+			Info struct {
+				ProductVersion string `json:"productVersion"`
+			} `json:"info"`
+		}
+		if err := json.Unmarshal(versionConfig, &config); err != nil {
+			t.Fatal(err)
+		}
+		if version != config.Info.ProductVersion {
+			t.Fatalf("local version %q differs from Wails product version %q", version, config.Info.ProductVersion)
+		}
+	}
 }
 
 func TestUpdatePackagesMatchReleaseWorkflow(t *testing.T) {
-	if latestReleaseURL != "https://api.github.com/repos/Overwhelmed44/shell-everywhere/releases/latest" {
+	if latestReleaseURL != "https://api.github.com/repos/Overwhelmed44/shell-anywhere/releases/latest" {
 		t.Fatal("updater points to a different repository than the release workflow")
 	}
 	for _, test := range []struct{ platform, arch, name string }{
@@ -139,6 +154,17 @@ func TestUpdatePackagesMatchReleaseWorkflow(t *testing.T) {
 	} {
 		if got := updatePackageName(test.platform, test.arch); got != test.name {
 			t.Errorf("%s/%s: got %s, want %s", test.platform, test.arch, got, test.name)
+		}
+	}
+}
+
+func TestReleaseBuildVersionTakesPriorityOverLocalConfiguration(t *testing.T) {
+	original := appVersion
+	t.Cleanup(func() { appVersion = original })
+	for _, tag := range []string{"v0.1.0", "v0.1.1", "v0.1.2-beta.1"} {
+		appVersion = tag
+		if got := (&App{}).GetAppVersion(); got != strings.TrimPrefix(tag, "v") {
+			t.Fatalf("release build %s used the local fallback instead: %s", tag, got)
 		}
 	}
 }
@@ -302,5 +328,72 @@ func TestUpdateRedirectsStayOnGitHubHTTPS(t *testing.T) {
 		if err := updateRedirect(request, nil); (err == nil) != test.allowed {
 			t.Errorf("unexpected redirect decision for %s", test.url)
 		}
+	}
+}
+
+func TestUpdateMetadataRedirectAndCachedPackageRecovery(t *testing.T) {
+	for _, scenario := range []string{"metadata redirect", "rate limited with cached package", "rate limited without cached package", "already current"} {
+		t.Run(scenario, func(t *testing.T) {
+			asset := testUpdateAsset()
+			var launchPath string
+			var quit bool
+			app := &App{}
+			app.updates.client = &http.Client{
+				CheckRedirect: updateRedirect,
+				Transport: releaseTransport(func(request *http.Request) (*http.Response, error) {
+					if request.URL.String() == asset.URL {
+						return releaseResponse(200, "installer"), nil
+					}
+					if strings.HasPrefix(scenario, "rate limited") {
+						response := releaseResponse(403, `{}`)
+						response.Header.Set("X-RateLimit-Remaining", "0")
+						return response, nil
+					}
+					if scenario == "metadata redirect" && request.URL.String() == latestReleaseURL {
+						response := releaseResponse(301, "")
+						response.Header.Set("Location", "https://api.github.com/repositories/123/releases/latest")
+						return response, nil
+					}
+					tag := "v65535.0.0"
+					if scenario == "already current" {
+						tag = "v" + app.GetAppVersion()
+					}
+					body, _ := json.Marshal(map[string]any{"tag_name": tag, "assets": []releaseAsset{asset}})
+					return releaseResponse(200, string(body)), nil
+				}),
+			}
+			app.updates.once.Do(func() {
+				app.updates.status = UpdateStatus{State: "unavailable"}
+				if scenario == "rate limited with cached package" {
+					app.updates.status = UpdateStatus{State: "update_available", CurrentVersion: app.GetAppVersion(), LatestVersion: "65535.0.0", asset: asset}
+				}
+			})
+			app.updates.launch = func(path string) error { launchPath = path; return nil }
+			app.updates.quit = func() { quit = true }
+			err := app.InstallUpdate()
+			if launchPath != "" {
+				defer removeUpdateDownload(launchPath)
+			}
+			if scenario == "rate limited without cached package" || scenario == "already current" {
+				if err == nil || quit || launchPath != "" {
+					t.Fatal("failed check must not install or quit")
+				}
+				want := "limit"
+				if scenario == "already current" {
+					want = "already have"
+				}
+				if !strings.Contains(err.Error(), want) {
+					t.Fatalf("error does not explain the actual failure: %v", err)
+				}
+			} else if err != nil || launchPath == "" || !quit {
+				t.Fatalf("update could not recover: %v", err)
+			}
+		})
+	}
+	// A package download cannot redirect into arbitrary API endpoints.
+	download, _ := http.NewRequest(http.MethodGet, testUpdateAsset().URL, nil)
+	apiRequest, _ := http.NewRequest(http.MethodGet, latestReleaseURL, nil)
+	if updateRedirect(apiRequest, []*http.Request{download}) == nil {
+		t.Fatal("download was allowed to redirect into the API")
 	}
 }

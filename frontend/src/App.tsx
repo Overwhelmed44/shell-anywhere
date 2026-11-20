@@ -33,6 +33,7 @@ import Sidebar from "./components/Sidebar";
 import Topbar from "./components/Topbar";
 import IdentitiesDialog from "./components/IdentitiesDialog";
 import VaultDialog from "./components/VaultDialog";
+import ConfirmDialog, { type Confirmation } from "./components/ConfirmDialog";
 import "./App.css";
 
 const initialTheme: Theme = (() => {
@@ -120,6 +121,7 @@ function App() {
     state: isDesktop ? "checking" : "unavailable",
   });
   const [updateBusy, setUpdateBusy] = useState(false);
+  const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const updateInFlight = useRef(false);
   const nextGroupId = useRef(0);
   const connectInFlight = useRef(false);
@@ -640,24 +642,30 @@ function App() {
     setActiveGroupId(null);
     setToast(group.name + " saved");
   };
-  const deleteGroup = async (id: string) => {
+  const deleteGroup = (id: string) => {
     const name = groups.find((group) => group.id === id)?.name ?? "Group";
     const count = hosts.filter((host) => host.groupId === id).length;
-    const message =
+    const description =
       count === 0
-        ? `Delete the group "${name}"?`
-        : `Delete the group "${name}"? ${count} ${count === 1 ? "host" : "hosts"} will move to No group. Their credentials will stay available`;
-    if (!window.confirm(message)) return;
-    try {
-      await api.deleteGroup(id);
-      setGroups((old) => old.filter((group) => group.id !== id));
-      await refreshWorkspace();
-      setSelectedGroup("All hosts");
-      setQuery("");
-      setToast("Group deleted");
-    } catch (err) {
-      setToast(errorText(err));
-    }
+        ? "This group has no hosts"
+        : `${count} ${count === 1 ? "host will" : "hosts will"} move to No group. Their credentials will stay available`;
+    setConfirmation({
+      title: `Delete “${name}”?`,
+      description,
+      confirmLabel: "Delete group",
+      busyLabel: "Deleting…",
+      danger: true,
+      onConfirm: async () => {
+        await api.deleteGroup(id);
+        setGroups((old) => old.filter((group) => group.id !== id));
+        setSelectedGroup("All hosts");
+        setQuery("");
+        setToast("Group deleted");
+        await refreshWorkspace().catch((reason) =>
+          setToast(`Group deleted, but hosts could not be refreshed: ${errorText(reason)}`),
+        );
+      },
+    });
   };
   const openEditor = (content: EditorContent) => {
     setEditor({ ...content, key: ++editorSequence.current });
@@ -677,21 +685,23 @@ function App() {
   const openGroup = (group: Group | null = null) =>
     openEditor({ kind: "group", group });
   const openIdentities = () => openEditor({ kind: "identities" });
-  const deleteHost = async (id: string) => {
-    if (
-      !window.confirm("Delete this saved host? Active sessions will stay open.")
-    )
-      return;
-    try {
-      await api.deleteHost(id);
-      setHosts((old) => old.filter((host) => host.id !== id));
-      setEditor((current) =>
-        current?.kind === "host" && current.host.id === id ? null : current,
-      );
-      setToast("Host deleted");
-    } catch (err) {
-      setToast(errorText(err));
-    }
+  const deleteHost = (id: string) => {
+    const host = hosts.find((item) => item.id === id);
+    setConfirmation({
+      title: `Delete “${host?.name ?? "this host"}”?`,
+      description: "This removes the saved host. Active sessions will stay open",
+      confirmLabel: "Delete host",
+      busyLabel: "Deleting…",
+      danger: true,
+      onConfirm: async () => {
+        await api.deleteHost(id);
+        setHosts((old) => old.filter((host) => host.id !== id));
+        setEditor((current) =>
+          current?.kind === "host" && current.host.id === id ? null : current,
+        );
+        setToast("Host deleted");
+      },
+    });
   };
 
   const toggleFavorite = async (host: Host) => {
@@ -731,18 +741,10 @@ function App() {
 
   const installUpdate = async () => {
     if (updateInFlight.current || update.state !== "update_available") return;
-    if (
-      !window.confirm(
-        `Update to v${update.latestVersion}? Shell Anywhere will download the installer and close so you can finish installing the update. Any active sessions and file transfers will end`,
-      )
-    )
-      return;
     updateInFlight.current = true;
     setUpdateBusy(true);
     try {
       await api.installUpdate();
-    } catch (err) {
-      setToast(errorText(err));
     } finally {
       updateInFlight.current = false;
       setUpdateBusy(false);
@@ -755,7 +757,13 @@ function App() {
         onIdentities={openIdentities}
         update={update}
         updateBusy={updateBusy}
-        onUpdate={() => void installUpdate()}
+        onUpdate={() => setConfirmation({
+          title: `Update to v${update.latestVersion}?`,
+          description: "Shell Anywhere will download and verify the installer, then close so you can finish installing the update. Active sessions and file transfers will end",
+          confirmLabel: "Download & update",
+          busyLabel: "Downloading update…",
+          onConfirm: installUpdate,
+        })}
         account={account}
         accountBusy={accountBusy}
         onAccountAction={(action) => void accountAction(action)}
@@ -909,6 +917,9 @@ function App() {
           onConnect={() => void connect(authPrompt)}
           onClose={() => setAuthPrompt(null)}
         />
+      )}
+      {confirmation && (
+        <ConfirmDialog {...confirmation} onClose={() => setConfirmation(null)} />
       )}
       {toast && (
         <div className="toast">

@@ -84,6 +84,7 @@ export type AccountStatus = {
 export type AccountAction = "login" | "cancel" | "logout";
 
 export type UpdateStatus = {
+  error?: string;
   currentVersion: string;
   latestVersion: string;
   state:

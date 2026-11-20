@@ -175,9 +175,10 @@ export default function Sidebar({
           data-update-state={update.state}
           role="status"
           title={
-            update.latestVersion
+            update.error ||
+            (update.latestVersion
               ? `Latest release: v${update.latestVersion}`
-              : undefined
+              : undefined)
           }
         >
           <span className="status-dot" aria-hidden="true" />

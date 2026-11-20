@@ -149,12 +149,12 @@ The bottom-left footer shows the actual build version and checks the latest stab
 It shows **New version available** only when that release is newer, otherwise **Up to date**
 If no release exists or the request fails, the footer shows that state instead of claiming the app is current
 The result is cached for the app session, including failed checks; there is no periodic update check
-When a newer stable release is available, **Update to v…** downloads the matching Windows installer, macOS disk image, or Linux `.deb` directly from `Overwhelmed44/shell-everywhere` without visiting GitHub
+When a newer stable release is available, **Update to v…** downloads the matching Windows installer, macOS disk image, or Linux `.deb` directly from `Overwhelmed44/shell-anywhere` without visiting GitHub
 The app refreshes release metadata when clicked, accepts only the expected package for this operating system and architecture, and verifies its size and SHA-256 digest from GitHub before opening it
-Confirming the update downloads the package, opens the installer, and closes Shell Anywhere, ending active sessions and transfers
+An app-styled confirmation explains the update before downloading the package, opening the installer, and closing Shell Anywhere, ending active sessions and transfers. Host and group deletion also use app-styled confirmations instead of browser popups
 Finish the Windows setup wizard, drag the macOS app into Applications, or use the Linux package installer, then reopen the app
 Linux requires a desktop handler for `.deb` packages; installations made from the portable archive still need to be updated manually
-Failed downloads or installer launches leave the app open and the update button available to retry; packages that are still building or lack a GitHub digest cannot be installed
+Failed downloads or installer launches leave the app open and show an error in the confirmation dialog so you can retry. API rate limits and network failures report their actual cause; a validated package from the startup check can still be downloaded if a metadata refresh temporarily fails. GitHub API redirects after repository renames are supported. Packages that are still building or lack a GitHub digest cannot be installed
 GitHub builds embed the full release tag, including prerelease suffixes; local builds use the product version from `wails.json`
 
 The React UI lives in `frontend/src`. `App.tsx` manages host and session state, while `components/` contains the dialogs, navigation, host list, cards, tabs, and session view. Shared TypeScript types are in `types.ts`, and the terminal implementation is in `TerminalPane.tsx`.
