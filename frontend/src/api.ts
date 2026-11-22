@@ -61,6 +61,8 @@ export type FileListing = {
   entries: FileEntry[];
 };
 
+export type FileStorage = { available: boolean; total: number; free: number };
+
 export type FileTransferProgress = {
   sessionId: string;
   id: string;
@@ -125,6 +127,7 @@ type Backend = {
     fingerprint: string,
   ): Promise<ConnectResult>;
   ListLocalFiles(path: string): Promise<FileListing>;
+  GetFileStorage(sessionId: string, path: string): Promise<FileStorage>;
   ListSFTPFiles(sessionId: string, path: string): Promise<FileListing>;
   ChooseLocalFolder(): Promise<string | null>;
   ChooseUploadFiles(): Promise<string[] | null>;
@@ -260,6 +263,7 @@ export const api = {
       fingerprint,
     ),
   listLocalFiles: (path: string) => backend().ListLocalFiles(path),
+  getFileStorage: (sessionId: string, path: string) => backend().GetFileStorage(sessionId, path),
   listSFTPFiles: (sessionId: string, path: string) =>
     backend().ListSFTPFiles(sessionId, path),
   chooseLocalFolder: async () => (await backend().ChooseLocalFolder()) ?? "",

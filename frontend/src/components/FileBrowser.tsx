@@ -11,37 +11,33 @@ import {
   ArrowLeft,
   ArrowRight,
   ArrowUpFromLine,
+  ArrowLeftRight,
   Check,
   Eye,
   EyeOff,
-  File,
-  Folder,
   FolderOpen,
-  FolderPlus,
   HardDrive,
-  Home,
-  Link,
   LoaderCircle,
-  RefreshCw,
   Server,
   X,
 } from "lucide-react";
 import {
   api,
   onEvent,
-  type FileEntry,
   type FileListing,
   type FileTransferProgress,
   type Host,
 } from "../api";
 import SFTPDestination, { type FileDestination } from "./SFTPDestination";
+import FilePane, { fileDragType } from "./FilePane";
+import { sizeText } from "./fileBrowserUtils";
 import { errorText } from "../utils";
 import { OnFileDrop, OnFileDropOff } from "../../wailsjs/runtime/runtime";
+import "./FileBrowser.css";
 
 type Side = "right" | "left";
 type Pane = {
   listing: FileListing | null;
-  input: string;
   loading: boolean;
   error: string;
 };
@@ -64,25 +60,11 @@ type Props = {
   onDestinationChange: (name: string, id: string) => void;
 };
 
-const dragType = "application/x-shell-anywhere-files";
 const emptyPane = (): Pane => ({
   listing: null,
-  input: "",
   loading: false,
   error: "",
 });
-
-function sizeText(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  const units = ["KB", "MB", "GB", "TB"];
-  let value = bytes / 1024;
-  let unit = 0;
-  while (value >= 1024 && unit < units.length - 1) {
-    value /= 1024;
-    unit++;
-  }
-  return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unit]}`;
-}
 
 export default function FileBrowser({
   sessionId,
@@ -96,6 +78,7 @@ export default function FileBrowser({
 }: Props) {
   const [destinationChosen, setDestinationChosen] = useState(false);
   const filePanes = useRef<HTMLDivElement>(null);
+  const dragSource = useRef<Side | null>(null);
   const [destination, setDestination] = useState<FileDestination | null>(null);
   const [destinationBusy, setDestinationBusy] = useState(false);
   const destinationRef = useRef<FileDestination | null>(null);
@@ -117,16 +100,13 @@ export default function FileBrowser({
     transfer: Transfer;
     paths: string[];
   } | null>(null);
-  const [folder, setFolder] = useState<{ side: Side; name: string } | null>(
-    null,
-  );
   const sequence = useRef({ right: 0, left: 0 });
   const paths = useRef({ right: "", left: "/" });
   const currentTransfer = useRef("");
   const transferSession = useRef(sessionId);
   const transferring = useRef(false);
   const externalDrop = useRef<(x: number, y: number, files: string[]) => void>(
-    () => {},
+    () => { },
   );
 
   const load = useCallback(
@@ -146,7 +126,7 @@ export default function FileBrowser({
         paths.current[side] = listing.path;
         setPanes((old) => ({
           ...old,
-          [side]: { listing, input: listing.path, loading: false, error: "" },
+          [side]: { listing, loading: false, error: "" },
         }));
         setSelected((old) => ({ ...old, [side]: [] }));
       } catch (reason) {
@@ -193,11 +173,12 @@ export default function FileBrowser({
       mainId === sessionId
         ? connected
         : destinationRef.current?.id === mainId &&
-          destinationRef.current.connected;
+        destinationRef.current.connected;
     if (
       !mainConnected ||
       (peerId && !destinationRef.current?.connected) ||
       destinationBusy ||
+      (conflict && !overwrite) ||
       transferring.current
     )
       return;
@@ -249,10 +230,10 @@ export default function FileBrowser({
       setCancelling(false);
       void load(
         request.destinationSide ??
-          (request.direction === "upload" ? "left" : "right"),
+        (request.direction === "upload" ? "left" : "right"),
         paths.current[
-          request.destinationSide ??
-            (request.direction === "upload" ? "left" : "right")
+        request.destinationSide ??
+        (request.direction === "upload" ? "left" : "right")
         ],
       );
     }
@@ -314,17 +295,6 @@ export default function FileBrowser({
     }
   };
 
-  const toggle = (side: Side, path: string, additive: boolean) => {
-    setSelected((old) => ({
-      ...old,
-      [side]: additive
-        ? old[side].includes(path)
-          ? old[side].filter((value) => value !== path)
-          : [...old[side], path]
-        : [path],
-    }));
-  };
-
   const dropTarget = (event: DragEvent, side: Side) => {
     const row = (event.target as HTMLElement).closest<HTMLElement>(
       "[data-file-directory]",
@@ -338,7 +308,7 @@ export default function FileBrowser({
     if (side === "right" && !destinationChosen) return;
     if (event.dataTransfer.types.includes("Files")) return;
     try {
-      const data = JSON.parse(event.dataTransfer.getData(dragType)) as {
+      const data = JSON.parse(event.dataTransfer.getData(fileDragType)) as {
         side: Side;
         paths: string[];
         sessionId: string;
@@ -359,389 +329,134 @@ export default function FileBrowser({
     }
   };
 
-  const createFolder = async () => {
-    if (!folder || !folder.name.trim()) return;
-    const { side, name } = folder;
-    try {
-      await api.createFileFolder(
-        side === "right" && destination ? destination.id : sessionId,
-        side === "left" || destination ? "remote" : "local",
-        paths.current[side],
-        name.trim(),
-      );
-      setFolder(null);
-      await load(side, paths.current[side]);
-    } catch (reason) {
-      setPanes((old) => ({
-        ...old,
-        [side]: { ...old[side], error: errorText(reason) },
-      }));
-    }
-  };
-
   const pane = (side: Side) => {
     const state = panes[side];
     const isRemote = side === "left" || Boolean(destination);
-    const disabled =
-      destinationBusy ||
-      (side === "right" && !destinationChosen) ||
-      (side === "left"
-        ? !connected
-        : destination
-          ? !destination.connected
-          : false);
-    const entries =
-      state.listing?.entries.filter(
-        (entry) => showHidden || !entry.name.startsWith("."),
-      ) ?? [];
-    const root = state.listing?.parent === state.listing?.path;
-    const dropStyle = {
-      "--wails-drop-target":
-        isRemote && active && !disabled && !busy ? "drop" : "none",
-    } as CSSProperties;
+    const disabled = destinationBusy || (side === "right" && !destinationChosen) ||
+      (side === "left" ? !connected : destination ? !destination.connected : false);
+    const canTransfer = connected && destinationChosen && !destinationBusy &&
+      (!destination || destination.connected) && !busy && !conflict &&
+      Boolean(panes.left.listing && panes.right.listing);
+    const transferLabel = destination ? "Copy" : side === "left" ? "Download" : "Upload";
+    const dropStyle = { "--wails-drop-target": isRemote && active && !disabled && !busy && !conflict ? "drop" : "none" } as CSSProperties;
     return (
-      <section
-        className={`file-pane ${side}${hover?.side === side ? " file-drop-over" : ""}`}
-        aria-label={side === "right" ? "Destination files" : "Source files"}
-      >
-        <div className="file-pane-title">
-          {side === "right" ? (
-            <SFTPDestination
-              hosts={hosts}
-              destination={destination}
-              chosen={destinationChosen}
-              disabled={busy || Boolean(conflict)}
-              onBusyChange={setDestinationBusy}
-              onChange={(next) => {
-                const previous = destinationRef.current;
-                destinationRef.current = next;
-                setDestination(next);
-                setDestinationChosen(true);
-                onDestinationChange(
-                  next?.host.name ?? "This computer",
-                  next?.id ?? "",
-                );
-                if (previous?.id !== next?.id || !destinationChosen) {
-                  sequence.current.right++;
-                  paths.current.right = next ? "/" : "";
-                  setPanes((old) => ({ ...old, right: emptyPane() }));
-                  setSelected((old) => ({ ...old, right: [] }));
-                  setProgress(null);
-                  setError("");
-                  setFolder(null);
-                  void load("right", paths.current.right);
-                } else if (next?.connected && !previous?.connected) {
-                  void load("right", paths.current.right);
-                }
-              }}
-            />
-          ) : (
-            <>
-              <Server size={17} />
-              <strong title={`${host.username}@${host.address}`}>
-                {host.name}
-              </strong>
-            </>
-          )}
-          {(side === "left" || destinationChosen) && (
+      <FilePane
+        key={side}
+        side={side}
+        sessionId={sessionId}
+        active={active}
+        storageSessionId={isRemote ? side === "left" ? sessionId : destination!.id : ""}
+        title={side === "right" ? <SFTPDestination
+          hosts={hosts}
+          destination={destination}
+          chosen={destinationChosen}
+          disabled={busy || Boolean(conflict)}
+          onBusyChange={setDestinationBusy}
+          onChange={(next) => {
+            const previous = destinationRef.current;
+            destinationRef.current = next;
+            setDestination(next);
+            setDestinationChosen(true);
+            onDestinationChange(next?.host.name ?? "This computer", next?.id ?? "");
+            if (previous?.id !== next?.id || !destinationChosen) {
+              sequence.current.right++;
+              paths.current.right = next ? "/" : "";
+              setPanes((old) => ({ ...old, right: emptyPane() }));
+              setSelected((old) => ({ ...old, right: [] }));
+              setProgress(null);
+              setError("");
+              void load("right", paths.current.right);
+            } else if (next?.connected && !previous?.connected) {
+              void load("right", paths.current.right);
+            }
+          }}
+        /> : <>
+          <span className="file-host-icon">
+            <Server size={18} />
+          </span>
+          <strong title={`${host.username}@${host.address}`}>
+            {host.name}
+          </strong>
+          <span className="file-endpoint-label">SFTP</span>
+        </>}
+        subtitle={side === "left" ? `${host.username}@${host.address}` : !destinationChosen ? "Local computer or another server" : destination ? `${destination.host.username}@${destination.host.address}` : "Local filesystem"}
+        ready={side === "left" || destinationChosen}
+        disabled={disabled}
+        busy={busy || Boolean(conflict)}
+        listing={state.listing}
+        loading={state.loading}
+        error={state.error}
+        selected={selected[side]}
+        showHidden={showHidden}
+        hoverPath={hover?.side === side ? hover.path : undefined}
+        dropStyle={dropStyle}
+        canTransfer={Boolean(canTransfer)}
+        transferLabel={transferLabel}
+        dropLabel={destination ? "Copy" : side === "left" ? "Upload" : "Download"}
+        onNavigate={(directory) => void load(side, directory)}
+        onSelect={(files) => setSelected((old) => ({ ...old, [side]: files }))}
+        onCreateFolder={async (name) => {
+          await api.createFileFolder(side === "right" && destination ? destination.id : sessionId, isRemote ? "remote" : "local", paths.current[side], name);
+          await load(side, paths.current[side]);
+        }}
+        onBrowseLocal={side === "right" && !destination ? () => void browseLocal() : undefined}
+        onTransfer={(files) => void transfer({ direction: side === "left" ? "download" : "upload", paths: files, target: paths.current[side === "left" ? "right" : "left"] })}
+        onDragOver={(event) => {
+          if (event.dataTransfer.types.includes(fileDragType) && dragSource.current === side) return;
+          if (disabled || busy || conflict || (!event.dataTransfer.types.includes(fileDragType) && !(isRemote && event.dataTransfer.types.includes("Files")))) return;
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "copy";
+          const target = dropTarget(event, side);
+          setHover((old) => old?.side === side && old.path === target ? old : { side, path: target });
+        }}
+        onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setHover(null); }}
+        onDrop={(event) => { if (!disabled && !busy && !conflict) drop(event, side); }}
+        onDragStart={() => { dragSource.current = side; }}
+        onDragEnd={() => { dragSource.current = null; setHover(null); }}
+        onDragScroll={(x, y) => {
+          const element = document.elementFromPoint(x, y);
+          const body = element?.closest<HTMLElement>("[data-file-session]");
+          if (body?.dataset.fileSession !== sessionId || body.dataset.fileSide !== side) return;
+          const target = element?.closest<HTMLElement>("[data-file-directory]")?.dataset.fileDirectory || paths.current[side];
+          setHover((old) => old?.side === side && old.path === target ? old : { side, path: target });
+        }}
+        emptyDestination={<div className="file-destination-choices">
+
+          <div className="file-destination-illustration">
             <span>
-              {selected[side].length
-                ? `${selected[side].length} selected`
-                : `${entries.length} items`}
+              <Server size={28} />
             </span>
-          )}
-        </div>
-        {(side === "left" || destinationChosen) && (
-          <form
-            className="file-location"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (!disabled) void load(side, state.input);
-            }}
-          >
-            <button
-              type="button"
-              className="icon-button"
-              aria-label={`${side} parent folder`}
-              title="Parent folder"
-              disabled={disabled || !state.listing || root}
-              onClick={() => void load(side, state.listing!.parent)}
-            >
-              <ArrowLeft size={16} />
-            </button>
-            <button
-              type="button"
-              className="icon-button"
-              aria-label={`${side} home folder`}
-              title="Home folder"
-              disabled={disabled}
-              onClick={() => void load(side, "")}
-            >
-              <Home size={16} />
-            </button>
-            <input
-              aria-label={`${side} path`}
-              value={state.input}
-              disabled={disabled}
-              onChange={(event) =>
-                setPanes((old) => ({
-                  ...old,
-                  [side]: { ...old[side], input: event.target.value },
-                }))
-              }
-              spellCheck={false}
-            />
-            {side === "right" && !destination && (
-              <button
-                type="button"
-                className="icon-button"
-                title="Choose local folder"
-                aria-label="Choose local folder"
-                onClick={() => void browseLocal()}
-              >
-                <FolderOpen size={16} />
-              </button>
-            )}
-            <button
-              type="button"
-              className="icon-button"
-              aria-label={`Refresh ${side} files`}
-              disabled={disabled}
-              onClick={() => void load(side, paths.current[side])}
-            >
-              {state.loading ? (
-                <LoaderCircle size={16} className="account-spinner" />
-              ) : (
-                <RefreshCw size={16} />
-              )}
-            </button>
-            <button
-              type="button"
-              className="icon-button"
-              aria-label={`New ${side} folder`}
-              title="New folder"
-              disabled={disabled || !state.listing}
-              onClick={() => setFolder({ side, name: "" })}
-            >
-              <FolderPlus size={16} />
-            </button>
-          </form>
-        )}
-        {folder?.side === side && (
-          <form
-            className="file-new-folder"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void createFolder();
-            }}
-          >
-            <input
-              autoFocus
-              aria-label="Folder name"
-              value={folder.name}
-              onChange={(event) =>
-                setFolder({ side, name: event.target.value })
-              }
-              placeholder="Folder name"
-              required
-            />
-            <button type="submit" className="button secondary">
-              Create
-            </button>
-            <button
-              type="button"
-              className="icon-button"
-              aria-label="Cancel new folder"
-              onClick={() => setFolder(null)}
-            >
-              <X size={15} />
-            </button>
-          </form>
-        )}
-        {state.error && (
-          <div className="file-pane-error" role="alert">
-            {state.error}
+            <ArrowLeftRight size={22} />
+            <span>
+              <HardDrive size={28} />
+            </span>
           </div>
-        )}
-        <div
-          className="file-pane-body"
-          data-file-session={sessionId}
-          data-file-side={side}
-          style={dropStyle}
-          onDragOver={(event) => {
-            if (
-              disabled ||
-              busy ||
-              (!event.dataTransfer.types.includes(dragType) &&
-                !(isRemote && event.dataTransfer.types.includes("Files")))
-            )
-              return;
-            event.preventDefault();
-            event.dataTransfer.dropEffect = "copy";
-            const target = dropTarget(event, side);
-            setHover((old) =>
-              old?.side === side && old.path === target
-                ? old
-                : { side, path: target },
-            );
-          }}
-          onDragLeave={(event) => {
-            if (!event.currentTarget.contains(event.relatedTarget as Node))
-              setHover(null);
-          }}
-          onDrop={(event) => drop(event, side)}
-        >
-          {side === "right" && !destinationChosen ? (
-            <div className="file-destination-choices">
-              <div className="file-destination-illustration">
-                <HardDrive size={27} />
-                <Server size={27} />
-              </div>
-              <h3>Choose a destination</h3>
-              <p>
-                Select this computer or a saved host above to browse files and
-                transfer between the two sides
-              </p>
-              <button
-                type="button"
-                className="button secondary"
-                disabled={destinationBusy}
-                onClick={() => {
-                  setDestinationChosen(true);
-                  onDestinationChange("This computer", "");
-                  void load("right", "");
-                }}
-              >
-                <HardDrive size={16} /> This computer
-              </button>
-            </div>
-          ) : (
-            <>
-              <table className="file-table" aria-label={`${side} file list`}>
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Size</th>
-                    <th>Modified</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {entries.map((entry: FileEntry) => (
-                    <tr
-                      key={entry.path}
-                      data-file-directory={
-                        entry.directory ? entry.path : undefined
-                      }
-                      className={`${selected[side].includes(entry.path) ? "selected" : ""}${hover?.side === side && hover.path === entry.path ? " drop-folder" : ""}`}
-                      tabIndex={0}
-                      aria-selected={selected[side].includes(entry.path)}
-                      draggable={!disabled && !busy && !entry.symlink}
-                      onClick={(event) =>
-                        toggle(side, entry.path, event.ctrlKey || event.metaKey)
-                      }
-                      onDoubleClick={() => {
-                        if (entry.directory && !disabled)
-                          void load(side, entry.path);
-                      }}
-                      onKeyDown={(event) => {
-                        if (
-                          event.key === "Enter" &&
-                          entry.directory &&
-                          !disabled
-                        ) {
-                          event.preventDefault();
-                          void load(side, entry.path);
-                        }
-                        if (event.key === " ") {
-                          event.preventDefault();
-                          toggle(side, entry.path, true);
-                        }
-                      }}
-                      onDragStart={(event) => {
-                        const files = selected[side].includes(entry.path)
-                          ? selected[side]
-                          : [entry.path];
-                        if (!selected[side].includes(entry.path))
-                          toggle(side, entry.path, false);
-                        event.dataTransfer.setData(
-                          dragType,
-                          JSON.stringify({ sessionId, side, paths: files }),
-                        );
-                        event.dataTransfer.effectAllowed = "copy";
-                      }}
-                      onDragEnd={() => setHover(null)}
-                    >
-                      <td>
-                        <div className="file-name">
-                          <input
-                            type="checkbox"
-                            aria-label={`Select ${entry.name}`}
-                            checked={selected[side].includes(entry.path)}
-                            onClick={(event) => event.stopPropagation()}
-                            onChange={() => toggle(side, entry.path, true)}
-                          />
-                          {entry.symlink ? (
-                            <Link size={17} />
-                          ) : entry.directory ? (
-                            <Folder size={17} />
-                          ) : (
-                            <File size={17} />
-                          )}
-                          <span title={entry.name}>{entry.name}</span>
-                        </div>
-                      </td>
-                      <td>{entry.directory ? "—" : sizeText(entry.size)}</td>
-                      <td>
-                        {entry.modified > 0
-                          ? new Date(entry.modified * 1000).toLocaleDateString()
-                          : "—"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {entries.length === 0 && (
-                <div className="file-empty">
-                  <FolderOpen size={30} />
-                  <span>
-                    {disabled
-                      ? "Reconnect to browse remote files"
-                      : state.loading
-                        ? "Loading files…"
-                        : "This folder is empty"}
-                  </span>
-                </div>
-              )}
-            </>
-          )}
-          {hover?.side === side && (
-            <div className="file-drop-hint">
-              {destination
-                ? "Drop to copy"
-                : side === "left"
-                  ? "Drop to upload"
-                  : "Drop to download"}
-            </div>
-          )}
-        </div>
-        <div className="file-pane-footer">
-          {side === "left"
-            ? "Drop files and folders here to copy"
-            : !destinationChosen
-              ? "Choose where you want to copy files"
-              : destination
-                ? "Drop files and folders here to copy"
-                : "Drop remote files here to download"}
-        </div>
-      </section>
+
+
+          <h3>Choose a destination</h3>
+
+
+          <p>Open your computer or choose a saved host above, then drag files between the two sides</p>
+
+
+          <button
+            type="button"
+            className="button primary"
+            disabled={destinationBusy}
+            onClick={() => { setDestinationChosen(true); onDestinationChange("This computer", ""); void load("right", ""); }}
+          >
+            <HardDrive size={16} /> Open this computer <ArrowRight size={15} />
+          </button>
+
+
+          <span className="file-destination-note">Your files stay between your devices</span>
+
+        </div>}
+      />
     );
   };
-
-  const percentage = progress?.total
-    ? Math.min(100, Math.round((progress.copied / progress.total) * 100))
-    : progress?.phase === "completed"
-      ? 100
-      : 0;
+  const percentage = progress?.phase === "completed" ? 100 : progress?.total
+    ? Math.min(100, Math.round((progress.copied / progress.total) * 100)) : 0;
 
   const changeRatio = (value: number) =>
     onResize(Math.min(80, Math.max(20, Math.round(value))));
@@ -758,44 +473,66 @@ export default function FileBrowser({
 
   return (
     <div className="file-browser">
+
       <div className="file-actions">
+
+        <span className="file-workspace-label">
+          <ArrowLeftRight size={17} /> File transfer</span>
+
+
         <button
           type="button"
-          className="button secondary"
+          className="button primary"
           disabled={
-            !connected || busy || destinationBusy || !panes.left.listing
+            !connected || busy || Boolean(conflict) || destinationBusy || !panes.left.listing
           }
           onClick={() => void uploadFiles(false)}
         >
+
           <ArrowUpFromLine size={15} /> Upload files
         </button>
+
+
         <button
           type="button"
           className="button secondary"
           disabled={
-            !connected || busy || destinationBusy || !panes.left.listing
+            !connected || busy || Boolean(conflict) || destinationBusy || !panes.left.listing
           }
           onClick={() => void uploadFiles(true)}
         >
+
           <FolderOpen size={15} /> Upload folder
         </button>
+
+
         <span className="spacer" />
+
+
         <button
           type="button"
-          className="button secondary"
+          className="button secondary file-hidden-toggle"
           aria-pressed={showHidden}
-          onClick={() => setShowHidden((old) => !old)}
+          onClick={() => { setShowHidden((old) => !old); setSelected({ left: [], right: [] }); }}
         >
+
           {showHidden ? <Eye size={15} /> : <EyeOff size={15} />} Hidden files
         </button>
+
       </div>
+
+
       <div
         className="file-panes"
         ref={filePanes}
         style={{ "--file-split-ratio": `${ratio}%` } as CSSProperties}
       >
+
         {pane("left")}
+
+
         <div className="file-transfer-buttons">
+
           <div
             className="file-split-divider"
             role="separator"
@@ -817,6 +554,8 @@ export default function FileBrowser({
               }
             }}
           />
+
+
           <button
             type="button"
             className="icon-button"
@@ -832,6 +571,7 @@ export default function FileBrowser({
               destinationBusy ||
               (destination !== null && !destination.connected) ||
               busy ||
+              Boolean(conflict) ||
               !selected.left.length ||
               !panes.right.listing
             }
@@ -843,8 +583,12 @@ export default function FileBrowser({
               })
             }
           >
+
             <ArrowRight size={20} />
+
           </button>
+
+
           <button
             type="button"
             className="icon-button"
@@ -860,6 +604,7 @@ export default function FileBrowser({
               destinationBusy ||
               (destination !== null && !destination.connected) ||
               busy ||
+              Boolean(conflict) ||
               !selected.right.length ||
               !panes.left.listing
             }
@@ -871,35 +616,80 @@ export default function FileBrowser({
               })
             }
           >
+
             <ArrowLeft size={20} />
+
           </button>
+
         </div>
+
+
         {pane("right")}
+
       </div>
+
+
+      {!progress && !conflict && !error && <div className="file-transfer-idle">
+        <ArrowLeftRight size={19} />
+        <div>
+          <strong>Ready when you are</strong>
+          <small>Drag files between panes or drop them from your desktop</small>
+        </div>
+        <span className="file-shortcut-hint">
+          <kbd>Shift</kbd> select a range <kbd>Ctrl A</kbd> select all</span>
+      </div>}
+
+
       {error && (
-        <div className="file-error" role="alert">
+        <div
+          className="file-error"
+          role="alert"
+        >
+
           {error}
+
+
           <button
             type="button"
             className="icon-button"
             aria-label="Dismiss transfer error"
             onClick={() => setError("")}
           >
+
             <X size={15} />
+
           </button>
+
         </div>
       )}
+
+
       {conflict && (
-        <div className="file-conflict" role="alert">
+        <div
+          className="file-conflict"
+          role="alert"
+        >
+
           <div>
+
             <strong>
-              {conflict.paths.length}{" "}
+
+              {conflict.paths.length}
+              {" "}
+
+
               {conflict.paths.length === 1
                 ? "file already exists"
                 : "files already exist"}
+
             </strong>
+
+
             <p>Replace existing files in the destination folder?</p>
+
           </div>
+
+
           <button
             type="button"
             className="button secondary"
@@ -910,6 +700,8 @@ export default function FileBrowser({
           >
             Cancel
           </button>
+
+
           <button
             type="button"
             className="button primary"
@@ -917,19 +709,33 @@ export default function FileBrowser({
           >
             Replace files
           </button>
+
         </div>
       )}
+
+
       {progress && !conflict && (
-        <div className={`file-progress ${progress.phase}`} role="status">
+        <div
+          className={`file-progress ${progress.phase}`}
+          role="status"
+        >
+
           <div className="file-progress-summary">
+
             {busy ? (
-              <LoaderCircle size={16} className="account-spinner" />
+              <LoaderCircle
+                size={16}
+                className="account-spinner"
+              />
             ) : progress.phase === "completed" ? (
               <Check size={16} />
             ) : (
               <FolderOpen size={16} />
             )}
+
+
             <span>
+
               {cancelling
                 ? "Stopping transfer…"
                 : progress.phase === "preparing"
@@ -941,11 +747,24 @@ export default function FileBrowser({
                       : progress.phase === "failed"
                         ? "Transfer failed"
                         : `${progress.direction === "copy" ? "Copying" : progress.direction === "upload" ? "Uploading" : "Downloading"} ${progress.completed} of ${progress.files} files`}
+
             </span>
+
+
             <span className="spacer" />
-            <span>
+
+
+            <span className="file-progress-percentage">
+              {percentage}%</span>
+
+
+            <span className="file-progress-bytes">
+
               {sizeText(progress.copied)} / {sizeText(progress.total)}
+
             </span>
+
+
             {busy ? (
               <button
                 type="button"
@@ -962,7 +781,9 @@ export default function FileBrowser({
                     });
                 }}
               >
+
                 <X size={16} />
+
               </button>
             ) : (
               <button
@@ -971,10 +792,15 @@ export default function FileBrowser({
                 aria-label="Dismiss transfer status"
                 onClick={() => setProgress(null)}
               >
+
                 <X size={16} />
+
               </button>
             )}
+
           </div>
+
+
           <div
             className="file-progress-bar"
             role="progressbar"
@@ -983,15 +809,26 @@ export default function FileBrowser({
             aria-valuemin={0}
             aria-valuemax={100}
           >
+
             <span style={{ width: `${percentage}%` }} />
+
           </div>
+
+
           {progress.current && (
-            <div className="file-progress-path" title={progress.current}>
+            <div
+              className="file-progress-path"
+              title={progress.current}
+            >
+
               {progress.current}
+
             </div>
           )}
+
         </div>
       )}
+
     </div>
   );
 }

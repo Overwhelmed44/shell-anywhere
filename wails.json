@@ -5,7 +5,7 @@
   "info": {
     "companyName": "Oxee",
     "productName": "Shell Anywhere",
-    "productVersion": "0.1.1",
+    "productVersion": "0.1.2",
     "comments": "Desktop SSH client"
   },
   "frontend:install": "npm install",
