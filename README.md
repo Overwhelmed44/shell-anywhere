@@ -18,6 +18,18 @@ A desktop SSH client built with Go, Wails, React, and xterm.js.
 - Save SSH passwords and successfully used private-key passphrases in the operating system's credential store, and include them when syncing
 - Store hosts and trusted host keys in `shell-anywhere` inside the user's config directory. Existing settings move automatically from the old directory, including restored private keys
 
+## SSH session extensions
+
+Each SSH connection has **Terminal** and **Server load** workspace views. Server load is one extension with a full dashboard: CPU, memory, system details, storage, network and disk I/O appear together in responsive cards. Switch views without opening another connection or losing terminal output. Use **Extensions** to enable or remove Server load as a whole. Its enabled state is remembered per host on this device; previous individual metric preferences are automatically consolidated
+
+**Split view** places the terminal on the left and the dashboard on the right within the same connection. Drag the divider to resize, use its arrow keys for small adjustments (Shift for larger steps), or double-click to reset to equal widths. **Terminal** and **Server load** return to either full view; **Exit split** expands the last focused pane. Each connection keeps its current view and split width when switching connection tabs
+
+The dashboard includes CPU usage, load averages, uptime, hostname, OS and kernel. Memory includes available RAM, reclaimable cache and swap. Storage reports filesystem usage and available space. Network shows receive/send rates and error counters per interface, with the default route identified. Disk I/O shows read/write throughput, IOPS and device busy time for whole devices. CPU and memory charts use a fixed percentage scale; network and I/O charts have throughput scales and selectors for a specific interface or device, with separate receive/send and read/write histories
+
+Live statistics currently support Linux SSH hosts. The app reads standard system counters over a separate exec channel on the existing SSH connection; it installs no agent, requests no root permissions, and does not send commands to the interactive terminal. Sampling runs about every three seconds only while the SSH tab and application window are visible and Server load is enabled. CPU and throughput rates need two samples; rebooted or reset counters establish a new baseline
+
+An unavailable counter or denied exec channel is shown in the extension without interrupting the terminal. Metrics requests have an eight-second timeout, bounded output, and one request at a time per SSH session. Refresh retries a failed or unsupported reading
+
 ## SFTP file transfers
 
 Click **SFTP** on a saved host to open an SFTP split group. The clicked host appears on the left, starting at `/`. The right pane starts with a destination chooser. SFTP uses the host's saved identity or separate credentials and the same trusted server keys as SSH, without starting a terminal

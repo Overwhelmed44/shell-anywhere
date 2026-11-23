@@ -84,11 +84,12 @@ type sessionEvent struct {
 }
 
 type activeSession struct {
-	client  *ssh.Client
-	ssh     *ssh.Session
-	stdin   io.WriteCloser
-	hostID  string
-	writeMu sync.Mutex
+	client    *ssh.Client
+	ssh       *ssh.Session
+	stdin     io.WriteCloser
+	hostID    string
+	writeMu   sync.Mutex
+	metricsMu sync.Mutex
 }
 
 type localTerminal interface {

@@ -1,4 +1,5 @@
 import type { LocalShell } from "./types";
+import type { ServerMetrics } from "./serverMetrics";
 
 export type LocalShellOption = { id: LocalShell; name: string };
 
@@ -205,6 +206,7 @@ type Backend = {
     fingerprint: string,
   ): Promise<ConnectResult>;
   GetLocalShells(): Promise<LocalShellOption[]>;
+  GetServerMetrics(sessionId: string): Promise<ServerMetrics>;
   StartLocalShell(shell: LocalShell): Promise<string>;
   WriteSession(id: string, data: string): Promise<void>;
   ResizeSession(id: string, rows: number, columns: number): Promise<void>;
@@ -231,6 +233,7 @@ function backend(): Backend {
 }
 
 export const api = {
+  getServerMetrics: (sessionId: string) => backend().GetServerMetrics(sessionId),
   openExternalLink: (url: string) => backend().OpenExternalLink(url),
   connectSFTP: (
     workspaceId: string,
