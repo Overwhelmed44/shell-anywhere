@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Copy, ClipboardPaste } from "lucide-react";
 import { Terminal } from "@xterm/xterm";
@@ -6,6 +6,8 @@ import { FitAddon } from "@xterm/addon-fit";
 import { api } from "./api";
 import { subscribeTerminal } from "./terminalBus";
 import { copyText, readClipboardText } from "./clipboard";
+import { SettingsContext } from "./settings";
+import { themes, type Theme } from "./themes";
 import "@xterm/xterm/css/xterm.css";
 
 const clipboardModifier = navigator.platform.includes("Mac") ? "Cmd" : "Ctrl";
@@ -15,43 +17,8 @@ type Props = {
   active: boolean;
   focused: boolean;
   connected: boolean;
-  theme: "dark" | "light";
+  theme: Theme;
   label: string;
-};
-
-const terminalThemes = {
-  dark: {
-    background: "#10141b",
-    foreground: "#dbe5ef",
-    cursor: "#c1c1ff",
-    selectionBackground: "#7772df88",
-    black: "#202936",
-    red: "#f58d91",
-    green: "#90d8a5",
-    yellow: "#f2ce86",
-    blue: "#8fb8f8",
-    magenta: "#c7a8ee",
-    cyan: "#8edbd5",
-    white: "#dbe5ef",
-    brightBlack: "#778390",
-    brightWhite: "#ffffff",
-  },
-  light: {
-    background: "#ffffff",
-    foreground: "#20243a",
-    cursor: "#514a98",
-    selectionBackground: "#c1c1ff99",
-    black: "#20243a",
-    red: "#b54251",
-    green: "#18805b",
-    yellow: "#9b711d",
-    blue: "#3559b6",
-    magenta: "#6e50a8",
-    cyan: "#126d82",
-    white: "#59627b",
-    brightBlack: "#737a8c",
-    brightWhite: "#20243a",
-  },
 };
 
 export default function TerminalPane({
@@ -62,6 +29,7 @@ export default function TerminalPane({
   theme,
   label,
 }: Props) {
+  const { terminalFontSize, terminalScrollback, terminalCursorBlink } = useContext(SettingsContext);
   const container = useRef<HTMLDivElement>(null);
   const terminal = useRef<Terminal | null>(null);
   const fit = useRef<FitAddon | null>(null);
@@ -105,7 +73,7 @@ export default function TerminalPane({
       fontSize: 13,
       lineHeight: 1.35,
       scrollback: 5000,
-      theme: terminalThemes.dark,
+      theme: themes.dark.terminal,
     });
     const fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
@@ -211,8 +179,22 @@ export default function TerminalPane({
 
   useEffect(() => {
     if (terminal.current)
-      terminal.current.options.theme = terminalThemes[theme];
+      terminal.current.options.theme = themes[theme].terminal;
   }, [theme]);
+
+  useEffect(() => {
+    if (!terminal.current) return;
+    terminal.current.options.fontSize = terminalFontSize;
+    terminal.current.options.scrollback = terminalScrollback;
+    terminal.current.options.cursorBlink = terminalCursorBlink;
+    if (active) {
+      fit.current?.fit();
+      if (connected) {
+        const { rows, cols } = terminal.current;
+        void api.resizeSession(sessionId, rows, cols).catch(() => {});
+      }
+    }
+  }, [terminalFontSize, terminalScrollback, terminalCursorBlink, active, connected, sessionId]);
 
   useEffect(() => {
     if (!active || !container.current) return;

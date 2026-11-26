@@ -450,7 +450,7 @@ func TestMSARValidatesRemoteCertificateWithLocalAccount(t *testing.T) {
 	}
 	response.Body.Close()
 
-	response, err = client.Get(context.Background(), "https://example.com/api/v1/private/vaults")
+	response, err = client.Get(context.Background(), "https://example.com/api/v1/sync")
 	if response != nil {
 		response.Body.Close()
 	}

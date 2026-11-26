@@ -53,11 +53,13 @@ func TestVaultEncryption(t *testing.T) {
 }
 
 type vaultServer struct {
-	blob      []byte
-	digest    string
-	protected bool
-	fail      bool
-	uploads   int
+	blob            []byte
+	digest          string
+	protected       bool
+	fail            bool
+	uploads         int
+	settings        []byte
+	settingsUploads int
 }
 
 func (s *vaultServer) serve(t *testing.T, w http.ResponseWriter, r *http.Request) {
@@ -81,50 +83,70 @@ func (s *vaultServer) serve(t *testing.T, w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if r.URL.Path == "/api/v1/private/vaults" {
-		var body struct{ Protected bool }
-		_ = json.NewDecoder(r.Body).Decode(&body)
-		if s.blob == nil {
-			s.protected = body.Protected
-		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"suid": "0123456789abcdef01234567", "protected": s.protected})
-		return
-	}
-	if r.URL.Path != "/api/v1/private/vaults/0123456789abcdef01234567" {
+	if r.URL.Path != "/api/v1/sync" {
 		http.NotFound(w, r)
 		return
 	}
 
 	if r.Method == http.MethodPut {
-		var body struct {
-			Vault, Digest string
-			Protected     bool
+		var body syncUpload
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Groups == nil {
+			t.Fatal("invalid nested upload")
 		}
-		_ = json.NewDecoder(r.Body).Decode(&body)
-		blob, err := base64.StdEncoding.DecodeString(body.Vault)
-		if err != nil || body.Digest != vaultDigest(blob) {
-			t.Error("incorrect upload digest")
+		if body.Private != nil {
+			blob, err := base64.StdEncoding.DecodeString(body.Private.Body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			s.blob, s.digest = blob, vaultDigest(blob)
+			if body.Private.Protected != nil {
+				s.protected = *body.Private.Protected
+			}
+			s.uploads++
 		}
-		s.blob, s.digest, s.protected = blob, body.Digest, body.Protected
-		s.uploads++
+		if body.Settings != nil {
+			var err error
+			s.settings, err = base64.StdEncoding.DecodeString(body.Settings.Body)
+			if err != nil || !json.Valid(s.settings) {
+				t.Fatal("invalid settings upload")
+			}
+			s.settingsUploads++
+		}
 		return
 	}
 
 	var body struct {
-		Digest       string
-		LocalChanges bool `json:"local_changes"`
+		Private  syncCheckEntity            `json:"private"`
+		Settings syncCheckEntity            `json:"settings"`
+		Groups   map[string]syncCheckEntity `json:"groups"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
-	status, action := "outdated", "init"
-	if body.Digest == s.digest {
-		status = "synced"
+	if body.Groups == nil {
+		t.Error("missing group checks")
 	}
-	if body.LocalChanges {
-		action = "share"
-	} else if s.blob != nil {
-		action = base64.StdEncoding.EncodeToString(s.blob)
+	check := func(entity syncCheckEntity, data []byte, digest string) syncAction {
+		status, action := "outdated", "init"
+		if entity.Digest == digest {
+			status = "synced"
+		}
+		if entity.LocalChanges {
+			action = "share"
+		} else if data != nil {
+			if status == "synced" {
+				action = "none"
+			} else {
+				action = base64.StdEncoding.EncodeToString(data)
+			}
+		}
+		return syncAction{Status: status, Action: action}
 	}
-	_ = json.NewEncoder(w).Encode(map[string]string{"status": status, "action": action})
+	settingsDigest := ""
+	if s.settings != nil {
+		settingsDigest = vaultDigest(s.settings)
+	}
+	_ = json.NewEncoder(w).Encode(syncCheckResult{
+		Private: check(body.Private, s.blob, s.digest), Settings: check(body.Settings, s.settings, settingsDigest), Groups: map[string]syncAction{},
+	})
 }
 
 func syncTestApp(t *testing.T, origin string) *App {

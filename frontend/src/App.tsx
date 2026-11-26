@@ -34,21 +34,23 @@ import Topbar from "./components/Topbar";
 import IdentitiesDialog from "./components/IdentitiesDialog";
 import VaultDialog from "./components/VaultDialog";
 import ConfirmDialog, { type Confirmation } from "./components/ConfirmDialog";
+import SettingsPage from "./components/SettingsPage";
+import { defaultSettings, SettingsContext, type AppSettings } from "./settings";
+import { applyTheme, isTheme } from "./themes";
 import "./App.css";
 
 const initialTheme: Theme = (() => {
   try {
-    return (
+    const saved = (
       localStorage.getItem("shell-anywhere-theme") ??
       localStorage.getItem("shell-everywhere-theme")
-    ) === "light"
-      ? "light"
-      : "dark";
+    );
+    return isTheme(saved) ? saved : "dark";
   } catch {
     return "dark";
   }
 })();
-document.documentElement.dataset.theme = initialTheme;
+applyTheme(initialTheme);
 
 const emptyHost: Host = {
   id: "",
@@ -86,7 +88,12 @@ type EditorContent =
 type Editor = EditorContent & { key: number };
 
 function App() {
-  const [theme, setTheme] = useState<Theme>(initialTheme);
+  const [settings, setSettings] = useState<AppSettings>({ ...defaultSettings, theme: initialTheme });
+  const theme = settings.theme;
+  const [showSettings, setShowSettings] = useState(false);
+  const [settingsReady, setSettingsReady] = useState(!isDesktop);
+  const [settingsLoadError, setSettingsLoadError] = useState("");
+  const [settingsLoadAttempt, setSettingsLoadAttempt] = useState(0);
   const [hosts, setHosts] = useState<Host[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -132,6 +139,19 @@ function App() {
   useEffect(() => {
     if (!isDesktop) return;
     let stopped = false;
+    void api.getSettings().then((saved) => {
+      if (stopped) return;
+      setSettings({ ...saved, theme: isTheme(saved.theme) ? saved.theme : initialTheme });
+      setSettingsReady(true);
+    }).catch((reason) => {
+      if (!stopped) setSettingsLoadError(errorText(reason));
+    });
+    return () => { stopped = true; };
+  }, [settingsLoadAttempt]);
+
+  useEffect(() => {
+    if (!isDesktop) return;
+    let stopped = false;
     void api
       .getAppVersion()
       .then((version) => {
@@ -154,7 +174,7 @@ function App() {
   }, []);
 
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
+    applyTheme(theme);
     try {
       localStorage.setItem("shell-anywhere-theme", theme);
       localStorage.removeItem("shell-everywhere-theme");
@@ -221,6 +241,11 @@ function App() {
     const offVault = onEvent("vault:changed", (data) =>
       setVault(data as VaultStatus),
     );
+    const offSettings = onEvent("settings:changed", (data) => {
+      const saved = data as AppSettings;
+      setSettings({ ...saved, theme: isTheme(saved.theme) ? saved.theme : initialTheme });
+      setSettingsReady(true);
+    });
     const offHosts = onEvent("hosts:changed", () => {
       void api
         .getWorkspace()
@@ -245,6 +270,7 @@ function App() {
 
     return () => {
       offVault();
+      offSettings();
       offHosts();
     };
   }, []);
@@ -751,8 +777,16 @@ function App() {
     }
   };
 
+  const saveSettings = async (next: AppSettings) => {
+    const saved = isDesktop ? await api.saveSettings(next) : next;
+    setSettings(saved);
+    setToast("Settings saved");
+  };
+
   return (
+    <SettingsContext.Provider value={settings}>
     <div className={`app-shell${editor ? " has-editor" : ""}`}>
+      <div className="workspace-shell" hidden={showSettings} inert={showSettings}>
       <Sidebar
         onIdentities={openIdentities}
         update={update}
@@ -779,8 +813,7 @@ function App() {
       />
       <div className="main-area">
         <Topbar
-          vault={vault}
-          onSyncSettings={() => setShowVault(true)}
+          onSettings={() => setShowSettings(true)}
           account={account}
           accountBusy={accountBusy}
           onAccountAction={(action) => void accountAction(action)}
@@ -792,8 +825,6 @@ function App() {
                 : (groups.find((group) => group.id === selectedGroup)?.name ??
                   selectedGroup)
           }
-          theme={theme}
-          onToggleTheme={() => setTheme(theme === "dark" ? "light" : "dark")}
           onStartLocal={(shell, name) => void startLocalShell(shell, name)}
         />
         <SessionTabs
@@ -837,6 +868,7 @@ function App() {
             onToggleFavorite={(host) => void toggleFavorite(host)}
           />
           <SessionWorkspace
+            visible={!showSettings}
             sessions={sessions}
             hosts={hosts}
             activeSession={activeSession}
@@ -883,13 +915,6 @@ function App() {
           onDelete={deleteHost}
         />
       )}
-      {showVault && account.user_id && (
-        <VaultDialog
-          status={vault}
-          onChange={setVault}
-          onClose={() => setShowVault(false)}
-        />
-      )}
       {editor?.kind === "group" && (
         <GroupDialog
           key={editor.key}
@@ -907,6 +932,34 @@ function App() {
           groups={groups}
           onChanged={refreshWorkspace}
           onClose={() => closeEditor(editor.key)}
+        />
+      )}
+      </div>
+      {showSettings && (
+        <SettingsPage
+          key={settingsReady ? "ready" : "loading"}
+          settings={settings}
+          ready={settingsReady}
+          loadError={settingsLoadError}
+          onRetry={() => {
+            setSettingsLoadError("");
+            setSettingsLoadAttempt((attempt) => attempt + 1);
+          }}
+          onSave={saveSettings}
+          onClose={() => setShowSettings(false)}
+          account={account}
+          accountBusy={accountBusy}
+          onAccountAction={(action) => void accountAction(action)}
+          vault={vault}
+          onSyncSettings={() => setShowVault(true)}
+          suspended={Boolean((showVault && account.user_id) || authPrompt || confirmation)}
+        />
+      )}
+      {showVault && account.user_id && (
+        <VaultDialog
+          status={vault}
+          onChange={setVault}
+          onClose={() => setShowVault(false)}
         />
       )}
       {authPrompt && (
@@ -930,6 +983,7 @@ function App() {
         </div>
       )}
     </div>
+    </SettingsContext.Provider>
   );
 }
 

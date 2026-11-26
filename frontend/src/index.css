@@ -17,7 +17,7 @@
   --space-6: 24px;
   --space-8: 32px;
 
-  /* Theme colors. The main accent stays #c1c1ff in both themes. */
+  /* Default palette; additional palettes are defined in themes.ts. */
   --color-bg: #10141b;
   --color-sidebar: #141a22;
   --color-header: #121820;
@@ -78,7 +78,8 @@
   -webkit-font-smoothing: antialiased;
 }
 
-:root[data-theme="light"] {
+:root[data-theme="light"],
+:root[data-color-scheme="light"] {
   --color-bg: #f7f8fd;
   --color-sidebar: #eff1fa;
   --color-header: #ffffff;
@@ -92,7 +93,7 @@
   --color-text: #20243a;
   --color-text-strong: #181b31;
   --color-text-secondary: #59627b;
-  --color-text-muted: #69738b;
+  --color-text-muted: #667088;
   --color-text-faint: #8990a5;
   --color-border: #dce0ed;
   --color-border-strong: #bfc6d8;

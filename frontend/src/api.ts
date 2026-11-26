@@ -1,5 +1,6 @@
 import type { LocalShell } from "./types";
 import type { ServerMetrics } from "./serverMetrics";
+import type { AppSettings } from "./settings";
 
 export type LocalShellOption = { id: LocalShell; name: string };
 
@@ -111,6 +112,8 @@ export type VaultStatus = {
 };
 
 type Backend = {
+  GetSettings(): Promise<AppSettings>;
+  SaveSettings(settings: AppSettings): Promise<AppSettings>;
   OpenExternalLink(url: string): Promise<void>;
   ConnectSFTP(
     workspaceId: string,
@@ -234,6 +237,8 @@ function backend(): Backend {
 
 export const api = {
   getServerMetrics: (sessionId: string) => backend().GetServerMetrics(sessionId),
+  getSettings: () => backend().GetSettings(),
+  saveSettings: (settings: AppSettings) => backend().SaveSettings(settings),
   openExternalLink: (url: string) => backend().OpenExternalLink(url),
   connectSFTP: (
     workspaceId: string,

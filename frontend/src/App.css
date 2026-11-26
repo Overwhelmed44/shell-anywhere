@@ -12,6 +12,17 @@
   color: var(--color-text);
 }
 
+.workspace-shell {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.workspace-shell[hidden] {
+  display: none;
+}
+
 .sidebar {
   width: 248px;
   flex: none;
@@ -456,10 +467,6 @@
   color: var(--color-text);
 }
 
-.theme-toggle {
-  color: var(--color-accent-text);
-}
-
 .account-sign-in,
 .account-trigger {
   display: flex;
@@ -493,8 +500,7 @@
   text-overflow: ellipsis;
 }
 
-.account-trigger:hover:not(:disabled),
-.account-trigger[aria-expanded="true"] {
+.account-trigger:hover:not(:disabled) {
   background: var(--color-hover);
 }
 
@@ -505,46 +511,9 @@
 }
 
 .account-trigger:focus-visible,
-.account-sign-in:focus-visible,
-.account-options button:focus-visible {
+.account-sign-in:focus-visible {
   outline: 2px solid var(--color-accent-text);
   outline-offset: 3px;
-}
-
-.account-menu {
-  position: relative;
-}
-
-.account-options {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  z-index: 30;
-  min-width: 160px;
-  padding: 5px;
-  border: 1px solid var(--color-border-strong);
-  border-radius: 8px;
-  background: var(--color-surface-raised);
-  box-shadow: 0 12px 30px var(--color-shadow);
-}
-
-.account-options button {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  width: 100%;
-  padding: 9px 10px;
-  border: 0;
-  border-radius: 5px;
-  background: transparent;
-  color: var(--color-text);
-  font-size: var(--font-sm);
-  text-align: left;
-}
-
-.account-options button:hover,
-.account-options button:focus-visible {
-  background: var(--color-hover);
 }
 
 .account-spinner {
@@ -1891,16 +1860,11 @@
   background: var(--color-hover);
 }
 
-.vault-choice small,
-.account-sync-item small {
+.vault-choice small {
   display: block;
   margin-top: 4px;
   color: var(--color-text-muted);
   font-size: var(--font-xs);
-}
-
-.account-options:has(.account-sync-item) {
-  min-width: 210px;
 }
 
 .form-grid {

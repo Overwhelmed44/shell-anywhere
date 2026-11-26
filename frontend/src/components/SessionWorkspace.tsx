@@ -7,6 +7,7 @@ type Props = {
   sessions: Session[];
   hosts: Host[];
   activeSession: string | null;
+  visible: boolean;
   split: SplitGroup | null;
   draggedSessionId: string | null;
   theme: Theme;
@@ -29,6 +30,7 @@ export default function SessionWorkspace({
   sessions,
   hosts,
   activeSession,
+  visible,
   split,
   draggedSessionId,
   theme,
@@ -96,8 +98,8 @@ export default function SessionWorkspace({
             session={session}
             hosts={hosts}
             placement={placement}
-            active={placement !== "hidden"}
-            focused={activeSession === session.id}
+            active={visible && placement !== "hidden"}
+            focused={visible && activeSession === session.id}
             theme={theme}
             reconnecting={reconnectingSessionId === session.id}
             onEdit={onEdit}

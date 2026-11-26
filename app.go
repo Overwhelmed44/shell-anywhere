@@ -130,6 +130,7 @@ type App struct {
 	openAccountURL func(string)
 	vault          vaultSync
 	updates        updateCheck
+	settings       AppSettings
 }
 
 func NewApp(configDir string) (*App, error) {
@@ -159,6 +160,9 @@ func NewApp(configDir string) (*App, error) {
 	}
 
 	a.workspaceID = "personal"
+	if err := a.loadSettings(); err != nil {
+		return nil, err
+	}
 	a.workspaces = make(map[string]string)
 	data, err := os.ReadFile(filepath.Join(configDir, "workspaces.json"))
 	if err == nil {
@@ -278,7 +282,7 @@ func (a *App) connectHost(sessionID, workspaceID, hostID, password, passphrase, 
 	var replaceKey bool
 	config := &ssh.ClientConfig{
 		User:    host.Username,
-		Timeout: 12 * time.Second,
+		Timeout: time.Duration(a.GetSettings().ConnectionTimeoutSeconds) * time.Second,
 		HostKeyCallback: func(hostname string, remote net.Addr, key ssh.PublicKey) error {
 			err := verifyKnown(hostname, remote, key)
 			if err == nil {
@@ -343,7 +347,7 @@ func (a *App) connectHost(sessionID, workspaceID, hostID, password, passphrase, 
 		}
 		config.Auth = []ssh.AuthMethod{ssh.PublicKeys(signer)}
 	}
-	client, err := ssh.Dial("tcp", address, config)
+	client, err := dialSSH(address, config)
 	if err != nil {
 		var challenge *unknownHostKey
 		if errors.As(err, &challenge) {

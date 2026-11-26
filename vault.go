@@ -34,13 +34,68 @@ type VaultStatus struct {
 }
 
 type vaultSettings struct {
-	Owner       string `json:"owner"`
-	Enabled     bool   `json:"enabled"`
-	SUID        string `json:"suid"`
-	Digest      string `json:"digest"`
-	LocalDigest string `json:"localDigest"`
-	Protected   bool   `json:"protected"`
-	LastSynced  string `json:"lastSynced"`
+	Owner               string `json:"owner"`
+	Enabled             bool   `json:"enabled"`
+	Digest              string `json:"digest"`
+	LocalDigest         string `json:"localDigest"`
+	Protected           bool   `json:"protected"`
+	LastSynced          string `json:"lastSynced"`
+	SettingsDigest      string `json:"settingsDigest,omitempty"`
+	LocalSettingsDigest string `json:"localSettingsDigest,omitempty"`
+}
+
+type syncCheckEntity struct {
+	Digest       string `json:"digest"`
+	LocalChanges bool   `json:"local_changes"`
+}
+
+type syncEntity struct {
+	Body      string `json:"body"`
+	Protected *bool  `json:"protected,omitempty"`
+}
+
+type syncUpload struct {
+	Private  *syncEntity           `json:"private"`
+	Settings *syncEntity           `json:"settings"`
+	Groups   map[string]syncEntity `json:"groups"`
+}
+
+type syncAction struct {
+	Status string `json:"status"`
+	Action string `json:"action"`
+}
+
+type syncCheckResult struct {
+	Private  syncAction            `json:"private"`
+	Settings syncAction            `json:"settings"`
+	Groups   map[string]syncAction `json:"groups"`
+}
+
+const syncPath = "/sync"
+
+func (a *App) checkSync(ctx context.Context, private syncCheckEntity, settings AppSettings) (syncCheckResult, error) {
+	data, err := json.Marshal(settings.overrides())
+	if err != nil {
+		return syncCheckResult{}, err
+	}
+	dirty := a.vault.settings.LocalSettingsDigest != "" && vaultDigest(data) != a.vault.settings.LocalSettingsDigest
+	var result syncCheckResult
+	err = a.vaultRequest(ctx, http.MethodPost, syncPath, map[string]any{
+		"private":  private,
+		"settings": syncCheckEntity{Digest: a.vault.settings.SettingsDigest, LocalChanges: dirty},
+		"groups":   map[string]syncCheckEntity{},
+	}, &result)
+	if err == nil && (result.Private.Status == "" || result.Settings.Status == "") {
+		err = errors.New("sync server returned an invalid response")
+	}
+	return result, err
+}
+
+func (a *App) uploadPrivate(ctx context.Context, blob []byte, protected bool) error {
+	return a.vaultRequest(ctx, http.MethodPut, syncPath, syncUpload{
+		Private: &syncEntity{Body: base64.StdEncoding.EncodeToString(blob), Protected: &protected},
+		Groups:  map[string]syncEntity{},
+	}, nil)
 }
 
 type vaultSync struct {
@@ -288,28 +343,12 @@ func (a *App) ConfigureVaultSync(password, direction string) (status VaultStatus
 	}
 	defer func() { err = errors.Join(err, a.saveVaultSession(origin)) }()
 
-	var created struct {
-		SUID      string `json:"suid"`
-		Protected bool   `json:"protected"`
-	}
-
-	err = a.vaultRequest(ctx, http.MethodPost, "/private/vaults", map[string]bool{"protected": password != ""}, &created)
+	settings := a.GetSettings()
+	result, err := a.checkSync(ctx, syncCheckEntity{}, settings)
 	if err != nil {
 		return a.vault.status, err
 	}
-	if len(created.SUID) != 24 {
-		return a.vault.status, errors.New("sync server returned an invalid vault id")
-	}
-
-	var checked struct {
-		Status string `json:"status"`
-		Action string `json:"action"`
-	}
-	path := "/private/vaults/" + url.PathEscape(created.SUID)
-	err = a.vaultRequest(ctx, http.MethodPost, path, map[string]any{"digest": "", "local_changes": false}, &checked)
-	if err != nil {
-		return a.vault.status, err
-	}
+	checked := result.Private
 
 	local, err := a.vaultSnapshot()
 	if err != nil {
@@ -319,8 +358,8 @@ func (a *App) ConfigureVaultSync(password, direction string) (status VaultStatus
 	key := a.vault.key
 	var cloud []byte
 	var blob []byte
-	protected := created.Protected
-	if checked.Action == "init" && password == "" && (!protected || len(key.Key) == 0) {
+	protected := len(key.Key) == 32
+	if checked.Action == "init" && password == "" && !protected {
 		protected = false
 		key = vaultKey{}
 	}
@@ -336,6 +375,7 @@ func (a *App) ConfigureVaultSync(password, direction string) (status VaultStatus
 		}
 	}
 
+	cloudProtected := protected
 	if password != "" && !protected {
 		key = newVaultKey(password)
 		protected = true
@@ -380,22 +420,25 @@ func (a *App) ConfigureVaultSync(password, direction string) (status VaultStatus
 		a.emit("hosts:changed", nil)
 	}
 
-	if cloud == nil || direction == "upload" || protected != created.Protected {
+	if cloud == nil || direction == "upload" || protected != cloudProtected {
 		blob, err = encodeVault(local, key)
 		if err != nil {
 			return a.vault.status, err
 		}
-		err = a.vaultRequest(ctx, http.MethodPut, path, map[string]any{
-			"vault": base64.StdEncoding.EncodeToString(blob), "digest": vaultDigest(blob), "protected": protected,
-		}, nil)
+		err = a.uploadPrivate(ctx, blob, protected)
 		if err != nil {
 			return a.vault.status, err
 		}
 	}
 
+	settingsDigest, localSettingsDigest, err := a.syncAppSettings(ctx, result.Settings, settings)
+	if err != nil {
+		return a.vault.status, err
+	}
 	a.vault.settings = vaultSettings{
-		Owner: a.vault.owner, Enabled: true, SUID: created.SUID, Digest: vaultDigest(blob),
+		Owner: a.vault.owner, Enabled: true, Digest: vaultDigest(blob),
 		LocalDigest: vaultDigest(local), Protected: protected, LastSynced: time.Now().UTC().Format(time.RFC3339),
+		SettingsDigest: settingsDigest, LocalSettingsDigest: localSettingsDigest,
 	}
 	if err = a.persistVault(); err != nil {
 		return a.vault.status, err
@@ -436,25 +479,19 @@ func (a *App) SyncVault() (status VaultStatus, err error) {
 		return a.vault.status, err
 	}
 	dirty := vaultDigest(local) != a.vault.settings.LocalDigest
-	path := "/private/vaults/" + url.PathEscape(a.vault.settings.SUID)
-	var checked struct {
-		Status string `json:"status"`
-		Action string `json:"action"`
-	}
-
-	err = a.vaultRequest(ctx, http.MethodPost, path, map[string]any{"digest": a.vault.settings.Digest, "local_changes": dirty}, &checked)
+	settings := a.GetSettings()
+	result, err := a.checkSync(ctx, syncCheckEntity{Digest: a.vault.settings.Digest, LocalChanges: dirty}, settings)
 	if err != nil {
 		return a.vault.status, err
 	}
+	checked := result.Private
 
 	if dirty || checked.Action == "init" {
 		blob, encodeErr := encodeVault(local, a.vault.key)
 		if encodeErr != nil {
 			return a.vault.status, encodeErr
 		}
-		err = a.vaultRequest(ctx, http.MethodPut, path, map[string]any{
-			"vault": base64.StdEncoding.EncodeToString(blob), "digest": vaultDigest(blob), "protected": a.vault.settings.Protected,
-		}, nil)
+		err = a.uploadPrivate(ctx, blob, a.vault.settings.Protected)
 		if err != nil {
 			return a.vault.status, err
 		}
@@ -488,6 +525,12 @@ func (a *App) SyncVault() (status VaultStatus, err error) {
 		a.emit("hosts:changed", nil)
 	}
 
+	settingsDigest, localSettingsDigest, err := a.syncAppSettings(ctx, result.Settings, settings)
+	if err != nil {
+		return a.vault.status, err
+	}
+	a.vault.settings.SettingsDigest = settingsDigest
+	a.vault.settings.LocalSettingsDigest = localSettingsDigest
 	a.vault.settings.LocalDigest = vaultDigest(local)
 	a.vault.settings.LastSynced = time.Now().UTC().Format(time.RFC3339)
 	if err = a.persistVault(); err != nil {

@@ -112,7 +112,7 @@ export default function VaultDialog({ status, onChange, onClose }: Props) {
         <div className="modal-heading">
           <div>
             <div className="eyebrow">Your Oxee account</div>
-            <h2 id="vault-dialog-title">{status.locked ? "Unlock host syncing" : "Host syncing"}</h2>
+            <h2 id="vault-dialog-title">{status.locked ? "Unlock host syncing" : "Cloud syncing"}</h2>
           </div>
           <button type="button" className="icon-button" onClick={onClose} disabled={working} aria-label="Close sync settings">
             <X size={18} />
@@ -133,7 +133,7 @@ export default function VaultDialog({ status, onChange, onClose }: Props) {
           </div>
         ) : status.enabled && !status.locked ? (
           <div className="vault-content">
-            <p className="modal-intro">Your hosts, groups, passwords, private keys, and trusted servers sync automatically across your devices</p>
+            <p className="modal-intro">Your hosts, groups, passwords, private keys, trusted servers, and app settings sync automatically across your devices</p>
             <div className="vault-protection">
               {status.protected ? <LockKeyhole size={20} /> : <Cloud size={20} />}
               <div>
@@ -157,7 +157,7 @@ export default function VaultDialog({ status, onChange, onClose }: Props) {
             <p className="modal-intro">
               {status.locked
                 ? "This cloud vault uses a password. Enter it to sync here, or keep using your local hosts without syncing"
-                : "Sync your complete SSH connections across devices with your Oxee account"}
+                : "Sync your SSH connections and app settings across devices with your Oxee account"}
             </p>
             <div className="vault-protection">
               {status.protected || password ? <LockKeyhole size={20} /> : <Cloud size={20} />}
@@ -187,7 +187,7 @@ export default function VaultDialog({ status, onChange, onClose }: Props) {
         )}
 
         {(error || status.error) && <div className="form-error" role="alert">{error || status.error}</div>}
-        <p className="vault-note vault-local-note">Sync includes SSH passwords, private keys, and saved key passphrases</p>
+        <p className="vault-note vault-local-note">Sync includes SSH passwords, private keys, and saved key passphrases. App settings sync separately from your encrypted vault</p>
       </div>
     </div>
   );

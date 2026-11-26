@@ -43,4 +43,4 @@ export type AuthPrompt = {
   previousFingerprints?: string[];
   keyType?: string;
 };
-export type Theme = "dark" | "light";
+export type { Theme } from "./themes";

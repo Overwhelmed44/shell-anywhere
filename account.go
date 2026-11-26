@@ -92,6 +92,7 @@ func (a *App) accountClient(origin string) *http.Client {
 	}
 
 	transport := http.DefaultTransport.(*http.Transport).Clone()
+	configureLocalDevelopmentTransport(transport)
 	address, err := url.Parse(origin)
 
 	if err == nil {
