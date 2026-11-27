@@ -1,5 +1,6 @@
 import { useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { Activity, Columns2, TerminalSquare } from "lucide-react";
+import { Activity, Columns2, Container, TerminalSquare } from "lucide-react";
+import { serverExtensionLabels, type ServerExtensionId } from "../serverMetrics";
 
 export type SSHView = "terminal" | "extension" | "split";
 
@@ -9,12 +10,15 @@ type Props = {
   active: boolean;
   focused: boolean;
   extension: ReactNode;
+  extensions: ServerExtensionId[];
+  selectedExtension: ServerExtensionId;
+  onExtensionChange: (id: ServerExtensionId) => void;
   onViewChange: (view: SSHView) => void;
   terminal: (state: { active: boolean; focused: boolean }) => ReactNode;
 };
 
 // These are views of one session, so keep the terminal mounted across layouts.
-export default function SSHWorkspace({ id, view, active, focused, extension, onViewChange, terminal }: Props) {
+export default function SSHWorkspace({ id, view, active, focused, extension, extensions, selectedExtension, onExtensionChange, onViewChange, terminal }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const [ratio, setRatio] = useState(50);
   const lastFocusedPane = useRef<"terminal" | "extension">("terminal");
@@ -22,6 +26,7 @@ export default function SSHWorkspace({ id, view, active, focused, extension, onV
   const layout = extension ? view : "terminal";
   const terminalVisible = layout !== "extension";
   const extensionVisible = layout !== "terminal";
+  const extensionLabel = serverExtensionLabels[selectedExtension];
   const focusPane = (pane: "terminal" | "extension") => {
     lastFocusedPane.current = pane;
     setFocusedPane(pane);
@@ -39,13 +44,18 @@ export default function SSHWorkspace({ id, view, active, focused, extension, onV
         <TerminalSquare size={14} />Terminal
       </button>
       {extension && <>
-        <button type="button" className="ssh-view-button" aria-pressed={layout === "extension"}
-          aria-controls={`${id}-extension`} onClick={() => select("extension")}>
-          <Activity size={14} />Server load
-        </button>
+        {extensions.map((item) => <button key={item} type="button" className="ssh-view-button"
+          aria-pressed={extensionVisible && item === selectedExtension}
+          aria-controls={`${id}-extension`} onClick={() => {
+            onExtensionChange(item);
+            if (layout !== "split") select("extension");
+            else focusPane("extension");
+          }}>
+          {item === "docker" ? <Container size={14} /> : <Activity size={14} />}{serverExtensionLabels[item]}
+        </button>)}
         <button type="button" className="ssh-view-button ssh-split-toggle" aria-pressed={layout === "split"}
           aria-label={layout === "split" ? "Exit split" : "Split view"}
-          aria-controls={`${id}-panes`} title={layout === "split" ? "Return to a single view" : "Show terminal and Server load side by side"}
+          aria-controls={`${id}-panes`} title={layout === "split" ? "Return to a single view" : `Show terminal and ${extensionLabel} side by side`}
           onClick={() => select(layout === "split" ? lastFocusedPane.current : "split")}>
           <Columns2 size={14} /><span>{layout === "split" ? "Exit split" : "Split view"}</span>
         </button>
@@ -64,8 +74,8 @@ export default function SSHWorkspace({ id, view, active, focused, extension, onV
         {extension}
       </div>}
       {layout === "split" && <div className="ssh-pane-divider" role="separator" tabIndex={0}
-        aria-label="Resize terminal and Server load" aria-orientation="vertical"
-        aria-valuemin={20} aria-valuemax={80} aria-valuenow={ratio} aria-valuetext={`Terminal ${ratio}%, Server load ${100 - ratio}%`}
+        aria-label={`Resize terminal and ${extensionLabel}`} aria-orientation="vertical"
+        aria-valuemin={20} aria-valuemax={80} aria-valuenow={ratio} aria-valuetext={`Terminal ${ratio}%, ${extensionLabel} ${100 - ratio}%`}
         onFocus={() => setFocusedPane("divider")}
         onPointerDown={(event) => {
           event.preventDefault();

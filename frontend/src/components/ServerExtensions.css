@@ -9,92 +9,7 @@
 
 .has-server-extensions .session-host-icon { flex: none; }
 .has-server-extensions .session-header > div:nth-child(2) { max-width: 235px; }
-.has-server-extensions .session-state { flex: none; margin-left: 0; white-space: nowrap; }
-
-.server-extension-toolbar {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex: 1;
-  min-width: 0;
-  margin-left: 12px;
-}
-
-.server-extension-trigger {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  height: 33px;
-  padding: 0 10px;
-  border: 1px dashed var(--color-border-strong);
-  border-radius: 7px;
-  background: transparent;
-  color: var(--color-text-muted);
-  font-size: 11px;
-  white-space: nowrap;
-}
-
-.server-extension-trigger:hover,
-.server-extension-trigger.open {
-  background: var(--color-hover);
-  color: var(--color-text-secondary);
-}
-
-.server-extension-count {
-  display: grid;
-  place-items: center;
-  min-width: 17px;
-  height: 17px;
-  border-radius: 4px;
-  background: var(--color-surface-raised);
-  color: var(--color-text-secondary);
-  font-size: 10px;
-}
-
-.server-extension-menu {
-  position: absolute;
-  top: calc(100% + 9px);
-  right: 0;
-  z-index: 35;
-  width: 295px;
-  max-width: calc(100vw - 40px);
-  padding: 6px;
-  background: var(--color-modal);
-  border: 1px solid var(--color-border-strong);
-  border-radius: 11px;
-  box-shadow: 0 10px 28px var(--color-shadow-soft);
-}
-
-.server-extension-menu-title {
-  padding: 10px 10px 12px;
-  color: var(--color-text-secondary);
-  font-size: var(--font-xs);
-  font-weight: 600;
-}
-
-.server-extension-menu button {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  width: 100%;
-  min-height: 56px;
-  padding: 9px 10px;
-  border: 0;
-  border-radius: 7px;
-  background: transparent;
-  color: var(--color-text-secondary);
-  text-align: left;
-}
-
-.server-extension-menu button:hover,
-.server-extension-menu button:focus-visible { background: var(--color-hover); }
-.server-extension-menu button > span { flex: 1; font-size: var(--font-sm); }
-.server-extension-menu button small { display: block; margin-top: 4px; color: var(--color-text-muted); font-size: 11px; line-height: 1.4; }
-.server-extension-menu button > svg { flex: none; }
-.server-extension-check { color: var(--color-accent-text); }
-.server-extension-menu-note { margin-top: 5px; padding: 11px 10px 7px; border-top: 1px solid var(--color-border); color: var(--color-text-faint); font-size: 10px; }
+.has-server-extensions .session-state { flex: none; margin-left: auto; white-space: nowrap; }
 
 .ssh-workspace {
   display: flex;
@@ -133,7 +48,6 @@
 .ssh-view-button[aria-pressed="true"] { background: var(--color-accent-soft); color: var(--color-accent-text); border-color: var(--color-accent-border); }
 .ssh-split-toggle { margin-left: auto; }
 .ssh-view-button:focus-visible,
-.server-extension-trigger:focus-visible,
 .server-card-heading select:focus-visible { outline: 2px solid var(--color-accent-border); outline-offset: 2px; }
 
 .ssh-view-panes {
@@ -299,18 +213,11 @@
   .server-chart-reading > strong { font-size: 22px; }
 }
 
-@container ssh-session (max-width: 850px) {
-  .server-extension-toolbar { margin-left: 0; }
-  .server-extension-trigger > span:not(.server-extension-count) { display: none; }
-  .server-extension-trigger > svg:last-child { display: none; }
-}
-
 @container ssh-session (max-width: 620px) {
   .has-server-extensions .session-header { gap: 8px; }
   .has-server-extensions .session-host-icon { display: none; }
   .has-server-extensions .session-header > div:nth-child(2) { max-width: none; flex: 1; }
   .has-server-extensions .session-state > span { display: none; }
-  .server-extension-toolbar { flex: none; }
   .ssh-view-button { gap: 5px; padding-inline: 8px; font-size: 11px; }
   .ssh-split-toggle > span { display: none; }
 }

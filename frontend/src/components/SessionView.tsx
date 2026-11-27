@@ -12,10 +12,11 @@ import TerminalPane from "../TerminalPane";
 import type { Host } from "../api";
 import type { Session, Theme } from "../types";
 import { sessionSubtitle, sessionTitle } from "../session";
-import { ServerInfoDashboard, ServerExtensionToolbar } from "./ServerExtensions";
+import { ServerInfoDashboard } from "./ServerExtensions";
 import SSHWorkspace, { type SSHView } from "./SSHWorkspace";
-import { defaultServerExtensions, validServerExtensions, type ServerExtensionId } from "../serverMetrics";
+import { serverExtensionIds, type ServerExtensionId } from "../serverMetrics";
 import { useServerMetrics } from "../useServerMetrics";
+import DockerExtension from "./DockerExtension";
 
 type Props = {
   session: Session;
@@ -52,28 +53,12 @@ export default function SessionView({
   onFileResize,
   onFileDestinationChange,
 }: Props) {
-  const preferenceKey = session.kind === "ssh" ? `shell-anywhere-ssh-extensions:${session.host.workspaceId}/${session.host.id}` : "";
-  const [pinnedExtensions, setExtensions] = useState<ServerExtensionId[]>(() => {
-    if (!preferenceKey) return [];
-    try {
-      const saved = localStorage.getItem(preferenceKey);
-      return saved === null ? [...defaultServerExtensions] : validServerExtensions(JSON.parse(saved));
-    } catch {
-      return [...defaultServerExtensions];
-    }
-  });
-  const extensions = validServerExtensions(pinnedExtensions);
+  const extensions = [...serverExtensionIds];
   const [view, setView] = useState<SSHView>("terminal");
+  const [selectedExtension, setSelectedExtension] = useState<ServerExtensionId>("server-info");
+  const selected = extensions.includes(selectedExtension) ? selectedExtension : extensions[0] ?? "server-info";
   const panelId = useId();
-  const monitor = useServerMetrics(session.id, active, session.connected, session.kind === "ssh" && extensions.length > 0);
-  const toggleExtension = (id: ServerExtensionId) => {
-    const next = validServerExtensions(extensions.includes(id) ? extensions.filter((item) => item !== id) : [...extensions, id]);
-    setExtensions(next);
-    setView(next.includes(id) ? "extension" : "terminal");
-    try {
-      localStorage.setItem(preferenceKey, JSON.stringify(next));
-    } catch { /* Session preferences remain available in memory */ }
-  };
+  const monitor = useServerMetrics(session.id, active, session.connected, session.kind === "ssh" && extensions.includes("server-info"));
   const renderTerminal = ({ active: terminalActive, focused: terminalFocused }: { active: boolean; focused: boolean }) => (
     <div className="terminal-frame">
       <div className="terminal-toolbar">
@@ -105,11 +90,6 @@ export default function SessionView({
             {sessionSubtitle(session)}
           </p>
         </div>
-        {session.kind === "ssh" && <ServerExtensionToolbar
-          pinned={extensions}
-          active={active}
-          onToggle={toggleExtension}
-        />}
         <div
           className={
             session.connected ? "session-state online" : "session-state"
@@ -160,8 +140,17 @@ export default function SessionView({
         />
       ) : session.kind === "ssh" ? (
         <SSHWorkspace id={panelId} view={view} active={active} focused={focused} onViewChange={setView}
+          extensions={extensions} selectedExtension={selected} onExtensionChange={setSelectedExtension}
           terminal={renderTerminal}
-          extension={extensions.length ? <ServerInfoDashboard monitor={monitor} connected={session.connected} /> : null} />
+          extension={extensions.length ? <>
+            {extensions.includes("server-info") && <div className="ssh-extension-content" hidden={selected !== "server-info"}>
+              <ServerInfoDashboard monitor={monitor} connected={session.connected} />
+            </div>}
+            {extensions.includes("docker") && <div className="ssh-extension-content" hidden={selected !== "docker"}>
+              <DockerExtension sessionId={session.id} connected={session.connected} theme={theme} focused={focused}
+                active={active && view !== "terminal" && selected === "docker"} />
+            </div>}
+          </> : null} />
       ) : renderTerminal({ active, focused })}
     </div>
   );

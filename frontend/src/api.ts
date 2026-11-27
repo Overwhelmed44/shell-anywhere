@@ -1,6 +1,7 @@
 import type { LocalShell } from "./types";
 import type { ServerMetrics } from "./serverMetrics";
 import type { AppSettings } from "./settings";
+import type { DockerOverview, DockerDetails, DockerLogs, DockerAction } from "./docker";
 
 export type LocalShellOption = { id: LocalShell; name: string };
 
@@ -210,6 +211,11 @@ type Backend = {
   ): Promise<ConnectResult>;
   GetLocalShells(): Promise<LocalShellOption[]>;
   GetServerMetrics(sessionId: string): Promise<ServerMetrics>;
+  GetDockerOverview(sessionId: string, includeMetrics: boolean): Promise<DockerOverview>;
+  StartDockerExec(sessionId: string, id: string, shell: "sh" | "bash"): Promise<string>;
+  GetDockerDetails(sessionId: string, id: string): Promise<DockerDetails>;
+  GetDockerLogs(sessionId: string, id: string): Promise<DockerLogs>;
+  DockerContainerAction(sessionId: string, id: string, action: DockerAction): Promise<void>;
   StartLocalShell(shell: LocalShell): Promise<string>;
   WriteSession(id: string, data: string): Promise<void>;
   ResizeSession(id: string, rows: number, columns: number): Promise<void>;
@@ -236,6 +242,11 @@ function backend(): Backend {
 }
 
 export const api = {
+  getDockerOverview: (sessionId: string, includeMetrics: boolean) => backend().GetDockerOverview(sessionId, includeMetrics),
+  startDockerExec: (sessionId: string, id: string, shell: "sh" | "bash") => backend().StartDockerExec(sessionId, id, shell),
+  getDockerDetails: (sessionId: string, id: string) => backend().GetDockerDetails(sessionId, id),
+  getDockerLogs: (sessionId: string, id: string) => backend().GetDockerLogs(sessionId, id),
+  dockerContainerAction: (sessionId: string, id: string, action: DockerAction) => backend().DockerContainerAction(sessionId, id, action),
   getServerMetrics: (sessionId: string) => backend().GetServerMetrics(sessionId),
   getSettings: () => backend().GetSettings(),
   saveSettings: (settings: AppSettings) => backend().SaveSettings(settings),

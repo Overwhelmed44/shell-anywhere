@@ -1,90 +1,14 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 import {
-  Activity, ArrowDown, ArrowUp, Check, ChevronDown, Cpu, HardDrive,
-  LoaderCircle, MemoryStick, Network, Plus, RefreshCw, Server,
+  Activity, ArrowDown, ArrowUp, Cpu, HardDrive,
+  LoaderCircle, MemoryStick, Network, RefreshCw, Server,
 } from "lucide-react";
 import {
   formatBytes, formatPercent, formatRate, formatUptime, percent,
-  serverExtensionIds, type ServerExtensionId,
 } from "../serverMetrics";
 import { metricChartPath } from "../serverMetricChart";
 import type { ServerMonitor } from "../useServerMetrics";
 import "./ServerExtensions.css";
-
-type ToolbarProps = {
-  pinned: ServerExtensionId[];
-  active: boolean;
-  onToggle: (id: ServerExtensionId) => void;
-};
-
-export function ServerExtensionToolbar({ pinned, active, onToggle }: ToolbarProps) {
-  const [open, setOpen] = useState(false);
-  const container = useRef<HTMLDivElement>(null);
-  const trigger = useRef<HTMLButtonElement>(null);
-  const menu = useRef<HTMLDivElement>(null);
-  const menuId = useId();
-  const visible = open && active;
-
-  useEffect(() => {
-    if (!visible) return;
-    menu.current?.querySelector<HTMLButtonElement>("button")?.focus();
-    const outside = (event: PointerEvent) => {
-      if (!container.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const key = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        event.stopPropagation();
-        setOpen(false);
-        trigger.current?.focus();
-      } else if (event.key === "Tab") {
-        setOpen(false);
-      } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-        event.preventDefault();
-        const items = Array.from(menu.current?.querySelectorAll<HTMLButtonElement>("button") ?? []);
-        const current = items.indexOf(document.activeElement as HTMLButtonElement);
-        items[(current + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length]?.focus();
-      }
-    };
-    document.addEventListener("pointerdown", outside);
-    document.addEventListener("keydown", key);
-    return () => {
-      document.removeEventListener("pointerdown", outside);
-      document.removeEventListener("keydown", key);
-    };
-  }, [visible]);
-
-  return <div className="server-extension-toolbar" ref={container}>
-    <button ref={trigger} type="button" className={`server-extension-trigger${visible ? " open" : ""}`}
-      title="Session extensions" aria-label="Session extensions" aria-haspopup="menu"
-      aria-expanded={visible} aria-controls={visible ? menuId : undefined}
-      onClick={() => setOpen((old) => !old)}
-      onKeyDown={(event) => {
-        if (event.key === "ArrowDown") {
-          event.preventDefault();
-          setOpen(true);
-        }
-      }}>
-      <Plus size={15} /><span>Extensions</span>
-      {pinned.length > 0 && <span className="server-extension-count">{pinned.length}</span>}
-      <ChevronDown size={12} />
-    </button>
-    {visible && <div ref={menu} id={menuId} className="server-extension-menu" role="menu" aria-label="Session extensions">
-      <div className="server-extension-menu-title">Session extensions</div>
-      {serverExtensionIds.map((id) => <button key={id} type="button" role="menuitemcheckbox"
-        aria-checked={pinned.includes(id)} onClick={() => {
-          onToggle(id);
-          setOpen(false);
-          trigger.current?.focus();
-        }}>
-        <Activity size={17} />
-        <span>Server load<small>CPU, RAM, storage, network and disk I/O</small></span>
-        {pinned.includes(id) && <Check size={15} className="server-extension-check" />}
-      </button>)}
-      <div className="server-extension-menu-note">Opens a view on this SSH connection</div>
-    </div>}
-  </div>;
-}
 
 function Meter({ value, label }: { value: number; label: string }) {
   return <div className={`server-meter${value >= 90 ? " high" : ""}`} role="meter" aria-label={label}

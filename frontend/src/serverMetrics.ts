@@ -20,18 +20,9 @@ export type ServerMetrics = {
   disks: ServerDiskIO[];
 };
 
-export const serverMetricSections = ["overview", "memory", "storage", "network", "io"] as const;
-export type ServerMetricSection = typeof serverMetricSections[number];
-export const serverExtensionIds = ["server-info"] as const;
+export const serverExtensionIds = ["server-info", "docker"] as const;
 export type ServerExtensionId = typeof serverExtensionIds[number];
-export const defaultServerExtensions: ServerExtensionId[] = ["server-info"];
-
-export function validServerExtensions(value: unknown): ServerExtensionId[] {
-  if (!Array.isArray(value)) return [...defaultServerExtensions];
-  // Consolidate previously pinned metric widgets into the single extension.
-  // Preserve an explicit empty selection so monitoring stays disabled.
-  return value.includes("server-info") || serverMetricSections.some((id) => value.includes(id)) ? ["server-info"] : [];
-}
+export const serverExtensionLabels: Record<ServerExtensionId, string> = { "server-info": "Server load", docker: "Docker" };
 
 export type NetworkRate = { name: string; received: number | null; sent: number | null };
 export type DiskRate = { name: string; read: number | null; write: number | null; readOps: number | null; writeOps: number | null; busy: number | null };

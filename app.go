@@ -90,6 +90,9 @@ type activeSession struct {
 	hostID    string
 	writeMu   sync.Mutex
 	metricsMu sync.Mutex
+	dockerMu  sync.Mutex
+	execMu    sync.Mutex
+	parentID  string
 }
 
 type localTerminal interface {
@@ -578,7 +581,9 @@ func (a *App) DisconnectSession(id string) {
 	}
 	if s != nil {
 		_ = s.ssh.Close()
-		_ = s.client.Close()
+		if s.parentID == "" {
+			_ = s.client.Close()
+		}
 	}
 }
 
